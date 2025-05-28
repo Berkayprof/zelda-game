@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hoofdmenu - Zelda Game</title>
+  <link rel="icon" href="https://i.ibb.co/DfJSTmCx/download.jpg">
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #1e3c72, #2a5298);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+    }
+    #menu-container {
+      text-align: center;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 40px;
+      border-radius: 15px;
+      box-shadow: 0px 10px 20px rgba(0,0,0,0.2);
+      margin-bottom: 20px;
+    }
+    h1 {
+      font-size: 48px;
+      margin-bottom: 20px;
+      color: #333;
+    }
+    label {
+      display: block;
+      font-size: 18px;
+      color: #555;
+      margin-bottom: 10px;
+    }
+    select {
+      font-size: 16px;
+      padding: 8px;
+      margin-bottom: 20px;
+      border-radius: 5px;
+      border: 1px solid #ddd;
+    }
+    .button-group {
+      margin-top: 20px;
+    }
+    button {
+      font-size: 20px;
+      padding: 10px 20px;
+      margin: 10px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      transition: background 0.3s ease;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    .changelog-button {
+      background: #f44336; /* Rode kleur voor changelog knop */
+    }
+    .changelog-button:hover {
+      background: #e53935;
+    }
+    #decorations {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .star {
+      position: absolute;
+      width: 5px;
+      height: 5px;
+      background: white;
+      border-radius: 50%;
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+      animation: twinkle 4s infinite ease-in-out;
+    }
+    @keyframes twinkle {
+      0%, 100% { opacity: 0.2; transform: scale(0.8); }
+      50% { opacity: 1; transform: scale(1.2); }
+    }
+    footer {
+      text-align: center;
+      color: white;
+      font-size: 14px;
+      margin-top: 20px;
+      padding: 10px 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="decorations"></div>
+
+  <div id="menu-container">
+    <h1>Welkom bij Zelda Game</h1>
+    <label for="version-selector">Selecteer een versie:</label>
+    <select id="version-selector">
+      <option value="game.html" selected>Versie 1.2 (nieuwste)</option>
+      <option value="1-1.html">Versie 1.1</option>
+    </select>
+    <div class="button-group">
+      <button id="play-button">PLAY</button>
+      <button id="changelog-button" class="changelog-button">STORY UPDATE Changelog</button>
+    </div>
+  </div>
+
+  <footer>
+    © 2025 Zelda Game Team | Gemaakt met liefde 💚
+  </footer>
+
+  <script>
+    // Dynamisch toevoegen van ster-effect
+    const decorations = document.getElementById('decorations');
+    for (let i = 0; i < 50; i++) {
+      const star = document.createElement('div');
+      star.className = 'star';
+      star.style.top = Math.random() * 100 + '%';
+      star.style.left = Math.random() * 100 + '%';
+      star.style.animationDelay = Math.random() * 2 + 's';
+      decorations.appendChild(star);
+    }
+
+    // Functie: Open het geselecteerde spel
+    const playButton = document.getElementById('play-button');
+    const versionSelector = document.getElementById('version-selector');
+    playButton.addEventListener('click', () => {
+      const selectedVersion = versionSelector.value;
+      window.location.href = selectedVersion; // Open het gekozen bestand
+    });
+
+    // Functie: Open changelog pagina
+    const changelogButton = document.getElementById('changelog-button');
+    changelogButton.addEventListener('click', () => {
+      window.open('changelog.html'); // Open de changelog in een nieuw tabblad
+    });
+  </script>
+</body>
+</html>

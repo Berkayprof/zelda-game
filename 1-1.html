@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <title>Zelda Game</title>
+  <link rel="icon" href="https://i.ibb.co/DfJSTmCx/download.jpg">
+  <!-- Three.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <style>
+    body, html {
+      margin: 0;
+      overflow: hidden;
+      height: 100%;
+      background: #0099ff; /* Luchtkleur */
+    }
+    /* Quest UI (linksboven) */
+    #questUI {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      padding: 10px;
+      background: rgba(0,0,0,0.6);
+      color: white;
+      font-family: Arial, sans-serif;
+      font-size: 16px;
+      z-index: 2;
+    }
+    /* HUD voor interactie */
+    .hud {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: white;
+      font-size: 20px;
+      padding: 10px;
+      background: rgba(0,0,0,0.6);
+      z-index: 2;
+      display: none;
+    }
+    /* Stamina-bar */
+    .stamina-bar {
+      position: absolute;
+      bottom: 60px;
+      left: 10px;
+      width: 200px;
+      height: 20px;
+      background: red;
+      border: 2px solid white;
+      z-index: 2;
+    }
+    .stamina-bar-inner {
+      height: 100%;
+      width: 100%;
+      background: limegreen;
+    }
+    /* Health-bar (rechterbovenhoek) */
+    .health-bar {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 200px;
+      height: 20px;
+      background: red;
+      border: 2px solid white;
+      z-index: 2;
+    }
+    .health-bar-inner {
+      height: 100%;
+      width: 100%;
+      background: limegreen;
+    }
+    /* Hotbar met 10 slots (onderaan) */
+    #hotbar {
+      position: absolute;
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 5px;
+      z-index: 2;
+    }
+    .hotbar-slot {
+      width: 40px;
+      height: 40px;
+      border: 2px solid white;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 14px;
+    }
+    /* Pauzeknop, in de rechterbovenhoek naast de health-bar */
+    #pauseButton {
+      position: absolute;
+      top: 10px;
+      right: 220px;
+      z-index: 3;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 5px 10px;
+      cursor: pointer;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+    }
+    /* Pauze-overlay: gecentreerd over het scherm */
+    #pauseOverlay {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      display: none;
+      z-index: 5;
+      background: rgba(0,0,0,0.5);
+      color: white;
+      font-size: 48px;
+      font-family: Arial, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  </style>
+</head>
+<body>
+  <!-- UI-elementen -->
+  <div id="questUI">Quest: Find de verborgen schatkist!</div>
+  <div class="hud" id="hudMessage">Druk op E om de schatkist te openen</div>
+  <div class="stamina-bar">
+    <div class="stamina-bar-inner" id="stamina"></div>
+  </div>
+  <div id="hotbar"></div>
+  <div class="health-bar">
+    <div class="health-bar-inner" id="health"></div>
+  </div>
+  <div id="pauseButton">Pause</div>
+  <div id="pauseOverlay">Paused</div>
+  
+  <script>
+    /************ Global Variables & Utility Functions ************/
+    var stamina = 100;
+    function updateStamina() {
+      var staminaEl = document.getElementById("stamina");
+      if (staminaEl) {
+        staminaEl.style.width = stamina + "%";
+      }
+    }
+    
+    var maxHealth = 100;
+    var playerHealth = 100;
+    function updateHealth() {
+      var healthEl = document.getElementById("health");
+      if (healthEl) {
+        healthEl.style.width = (playerHealth / maxHealth * 100) + "%";
+      }
+    }
+    
+    // Variabelen voor springen
+    var verticalVelocity = 0;
+    var jumpForce = 12;
+    var gravity = 30;
+    var isJumping = false;
+    
+    // Arrays voor obstakels, boom-colliders, quest status, vijanden
+    var obstacles = [];
+    var treeColliders = [];
+    var questCompleted = false;
+    var enemies = [];
+    
+    // UI-elementen
+    var hud = document.getElementById("hudMessage");
+    var questUI = document.getElementById("questUI");
+    var hotbar = document.getElementById("hotbar");
+    
+    // Pauze variables en functies
+    var isPaused = false;
+    var pauseButton = document.getElementById("pauseButton");
+    var pauseOverlay = document.getElementById("pauseOverlay");
+    function togglePause() {
+      isPaused = !isPaused;
+      if (isPaused) {
+        pauseOverlay.style.display = "flex";
+        pauseButton.innerText = "Resume";
+      } else {
+        pauseOverlay.style.display = "none";
+        pauseButton.innerText = "Pause";
+      }
+    }
+    document.addEventListener("keydown", function(e) {
+      if (e.key.toLowerCase() === "p") {
+        togglePause();
+      }
+    });
+    pauseButton.addEventListener("click", function() {
+      togglePause();
+    });
+    
+    /************ Scene, Camera, Renderer & Clock ************/
+    var scene = new THREE.Scene();
+    var camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+    var renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x0099ff, 1);
+    document.body.appendChild(renderer.domElement);
+    window.addEventListener("resize", function(){
+      camera.aspect = window.innerWidth/window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+    var clock = new THREE.Clock();
+    
+    /************ Pointer Lock & Mouse Input ************/
+    renderer.domElement.addEventListener("click", function() {
+      renderer.domElement.requestPointerLock();
+    });
+    var playerYaw = 0;
+    const sensitivity = 0.002;
+    document.addEventListener("mousemove", function(event) {
+      if (document.pointerLockElement === renderer.domElement) {
+        playerYaw -= event.movementX * sensitivity;
+      }
+    });
+    
+    /************ Besturing ************/
+    var keys = { w: false, a: false, s: false, d: false, shift: false, e: false, space: false };
+    document.addEventListener("keydown", function(event) {
+      if (event.code === "Space") {
+        keys.space = true;
+      } else if (event.key.toLowerCase() !== "p") { // P is voor pauze
+        var k = event.key.toLowerCase();
+        if (keys.hasOwnProperty(k)) keys[k] = true;
+      }
+    });
+    document.addEventListener("keyup", function(event) {
+      if (event.code === "Space") {
+        keys.space = false;
+      } else if (event.key.toLowerCase() !== "p") {
+        var k = event.key.toLowerCase();
+        if (keys.hasOwnProperty(k)) keys[k] = false;
+      }
+    });
+    document.addEventListener("mousedown", function(event) {
+      if (event.button === 0) {
+        swingSword();
+      }
+    });
+    
+    /************ Verlichting ************/
+    var ambientLight = new THREE.AmbientLight(0x404040, 2);
+    scene.add(ambientLight);
+    var directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    directionalLight.position.set(5,10,5).normalize();
+    scene.add(directionalLight);
+    
+    /************ Improved Noise (Perlin Noise) ************/
+    var ImprovedNoise = function() {
+      var p = new Uint8Array(512);
+      var permutation = [151,160,137,91,90,15,
+         131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,
+         8,99,37,240,21,10,23,190,6,148,247,120,234,75,0,26,
+         197,62,94,252,219,203,117,35,11,32,57,177,33,88,237,149,
+         56,87,174,20,125,136,171,168,68,175,74,165,71,134,139,48,
+         27,166,77,146,158,231,83,111,229,122,60,211,133,230,220,105,
+         92,41,55,46,245,40,244,102,143,54,65,25,63,161,1,216,80,
+         73,209,76,132,187,208,89,18,169,200,196,135,130,116,188,159,
+         86,164,100,109,198,173,186,3,64,52,217,226,250,124,123,5,
+         202,38,147,118,126,255,82,85,212,207,206,59,227,47,16,58,
+         17,182,189,28,42,223,183,170,213,119,248,152,2,44,154,163,
+         70,221,153,101,155,167,43,172,9,129,22,39,253,19,98,108,
+         110,79,113,224,232,178,185,112,104,218,246,97,228,251,34,242,
+         193,238,210,144,12,191,179,162,241,81,51,145,235,249,14,239,
+         107,49,192,214,31,181,199,106,157,184,84,204,176,115,121,50,
+         45,127,4,150,254,138,236,205,93,222,114,67,29,24,72,243,141,
+         128,195,78,66,215,61,156,180
+      ];
+      for (var i = 0; i < 256; i++) {
+         p[i] = permutation[i];
+         p[256+i] = permutation[i];
+      }
+      function fade(t) { return t*t*t*(t*(t*6-15)+10); }
+      function lerp(t, a, b) { return a + t*(b-a); }
+      function grad(hash, x, y, z) {
+         var h = hash & 15;
+         var u = h < 8 ? x : y;
+         var v = h < 4 ? y : (h===12 || h===14 ? x : z);
+         return ((h & 1)===0 ? u : -u) + ((h & 2)===0 ? v : -v);
+      }
+      this.noise = function(x,y,z) {
+         var floorX = Math.floor(x), floorY = Math.floor(y), floorZ = Math.floor(z);
+         var X = floorX & 255, Y = floorY & 255, Z = floorZ & 255;
+         x -= floorX; y -= floorY; z -= floorZ;
+         var u = fade(x), v = fade(y), w = fade(z);
+         var A = p[X] + Y, AA = p[A] + Z, AB = p[A+1] + Z;
+         var B = p[X+1] + Y, BA = p[B] + Z, BB = p[B+1] + Z;
+         return lerp(w,
+            lerp(v,
+               lerp(u, grad(p[AA], x,y,z), grad(p[BA], x-1,y,z)),
+               lerp(u, grad(p[AB], x,y-1,z), grad(p[BB], x-1,y-1,z))
+            ),
+            lerp(v,
+               lerp(u, grad(p[AA+1], x,y,z-1), grad(p[BA+1], x-1,y,z-1)),
+               lerp(u, grad(p[AB+1], x,y-1,z-1), grad(p[BB+1], x-1,y-1,z-1))
+            )
+         );
+      };
+    };
+    var noise = new ImprovedNoise();
+    
+    /************ Terrain & Landscape ************/
+    var terrainGeometry = new THREE.PlaneGeometry(200,200,199,199);
+    terrainGeometry.rotateX(-Math.PI/2);
+    function getTerrainHeight(x,z) {
+       return noise.noise(x/50, z/50, 0) * 10;
+    }
+    var vertices = terrainGeometry.attributes.position;
+    for (var i = 0; i < vertices.count; i++){
+      var x = vertices.getX(i);
+      var z = vertices.getZ(i);
+      vertices.setY(i, getTerrainHeight(x,z));
+    }
+    vertices.needsUpdate = true;
+    terrainGeometry.computeVertexNormals();
+    var terrainMaterial = new THREE.MeshStandardMaterial({ color: 0x55aa55, flatShading:true });
+    var terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
+    scene.add(terrain);
+    
+    /************ Trees ************/
+    function createTree(x,z){
+      var y = getTerrainHeight(x,z);
+      var trunkGeom = new THREE.CylinderGeometry(0.5,0.5,4,8);
+      var trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+      var trunk = new THREE.Mesh(trunkGeom, trunkMat);
+      trunk.position.set(x, y+2, z);
+      scene.add(trunk);
+      var leavesGeom = new THREE.SphereGeometry(2,8,8);
+      var leavesMat = new THREE.MeshStandardMaterial({ color: 0x228B22 });
+      var leaves = new THREE.Mesh(leavesGeom, leavesMat);
+      leaves.position.set(x, y+4.5, z);
+      scene.add(leaves);
+      treeColliders.push({ pos: trunk.position.clone(), radius: 1.5 });
+    }
+    for (var i = 0; i < 30; i++){
+      var tx = Math.random()*200 - 100;
+      var tz = Math.random()*200 - 100;
+      createTree(tx,tz);
+    }
+    
+    /************ Quest & Hotbar UI ************/
+    for (var i = 0; i < 10; i++){
+      var slot = document.createElement("div");
+      slot.className = "hotbar-slot";
+      slot.innerText = "";
+      hotbar.appendChild(slot);
+    }
+    var hotbarItems = new Array(10).fill(null);
+    function addToHotbar(item){
+      for (var i = 0; i < hotbarItems.length; i++){
+         if (!hotbarItems[i]){
+            hotbarItems[i] = item;
+            hotbar.children[i].innerText = item;
+            break;
+         }
+      }
+    }
+    
+    /************ Player, Chest & Interaction ************/
+    var playerGeometry = new THREE.BoxGeometry(1,1,1);
+    var playerMaterial = new THREE.MeshStandardMaterial({ color: 0x0000ff });
+    var player = new THREE.Mesh(playerGeometry, playerMaterial);
+    player.position.set(0, getTerrainHeight(0,0)+1, 0);
+    scene.add(player);
+    var chestGeometry = new THREE.BoxGeometry(1,0.5,1);
+    var chestMaterial = new THREE.MeshStandardMaterial({ color: 0xaa5522 });
+    var chest = new THREE.Mesh(chestGeometry, chestMaterial);
+    var chestX = 50, chestZ = 50;
+    chest.position.set(chestX, getTerrainHeight(chestX,chestZ)+0.25, chestZ);
+    scene.add(chest);
+    var chestOpened = false;
+    
+    /************ Sword & Swing Animation ************/
+    var swordAttached = false;
+    var sword;
+    function attachSword(){
+      if(swordAttached) return;
+      var swordGeom = new THREE.BoxGeometry(0.1,1.5,0.2);
+      var swordMat = new THREE.MeshStandardMaterial({ color: 0xcccccc });
+      sword = new THREE.Mesh(swordGeom, swordMat);
+      sword.position.set(0.6,0.25,0);
+      player.add(sword);
+      swordAttached = true;
+    }
+    var isSwinging = false;
+    function swingSword(){
+      if(!swordAttached || isSwinging) return;
+      isSwinging = true;
+      sword.rotation.x = -Math.PI/4;
+      attackEnemies();
+      setTimeout(function(){
+         sword.rotation.x = 0;
+         isSwinging = false;
+      },200);
+    }
+    
+    /************ Sword Hit Detection & Damage Animation ************/
+    function attackEnemies(){
+      var attackRange = 3;
+      var damageAmount = 25;
+      for(var i = 0; i < enemies.length; i++){
+         var enemy = enemies[i];
+         var distance = enemy.position.distanceTo(player.position);
+         if(distance <= attackRange){
+            enemy.health -= damageAmount;
+            flashEnemyDamage(enemy);
+            if(enemy.health <= 0){
+               scene.remove(enemy);
+               enemies.splice(i, 1);
+               i--;
+            }
+         }
+      }
+    }
+    function flashEnemyDamage(enemy){
+      var originalColor = enemy.material.color.getHex();
+      enemy.material.color.set(0xffffff);
+      setTimeout(function(){
+         enemy.material.color.set(originalColor);
+      },100);
+    }
+    
+    /************ Enemy Spawning & Updates ************/
+    function spawnEnemies(count){
+      for(var i = 0; i < count; i++){
+         var enemyGeom = new THREE.BoxGeometry(1,1,1);
+         var enemyMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+         var enemy = new THREE.Mesh(enemyGeom, enemyMat);
+         var ex, ez;
+         do{
+            ex = Math.random()*200 - 100;
+            ez = Math.random()*200 - 100;
+         } while((new THREE.Vector2(ex,ez)).distanceTo(new THREE.Vector2(player.position.x, player.position.z)) < 30);
+         var ey = getTerrainHeight(ex,ez)+1;
+         enemy.position.set(ex,ey,ez);
+         enemy.health = 50;
+         enemy.speed = 10;
+         scene.add(enemy);
+         enemies.push(enemy);
+      }
+    }
+    function updateEnemies(delta){
+      if(questCompleted && enemies.length === 0){
+         spawnEnemies(3);
+      }
+      for(var i = 0; i < enemies.length; i++){
+         var enemy = enemies[i];
+         var direction = new THREE.Vector3().subVectors(player.position, enemy.position);
+         var distance = direction.length();
+         direction.normalize();
+         enemy.position.add(direction.multiplyScalar(enemy.speed * delta));
+         if(distance < 2){
+            var damage = 10 * delta;
+            playerHealth -= damage;
+            updateHealth();
+            if(playerHealth <= 0){
+               alert("Game Over!");
+               location.reload();
+            }
+         }
+      }
+    }
+    
+    /************ Collision Detection ************/
+    var playerRadius = 0.5;
+    function checkCollision(newPos){
+      var collision = false;
+      if(obstacles.length > 0){
+         for(var i = 0; i < obstacles.length; i++){
+            if(newPos.distanceTo(obstacles[i].position) < 1.5){
+               collision = true;
+               break;
+            }
+         }
+      }
+      for(var j = 0; j < treeColliders.length; j++){
+         var tree = treeColliders[j];
+         if(newPos.distanceTo(tree.pos) < (playerRadius + tree.radius)){
+            collision = true;
+            break;
+         }
+      }
+      return collision;
+    }
+    
+    /************ Map Bounds & Falling ************/
+    function checkBounds(){
+      if(player.position.x < -100 || player.position.x > 100 ||
+         player.position.z < -100 || player.position.z > 100){
+         player.position.y -= 0.5;
+         if(player.position.y < -20){
+            player.position.set(0, getTerrainHeight(0,0)+1, 0);
+         }
+      }
+    }
+    
+    /************ Quest Interaction ************/
+    function checkInteraction(){
+      if(chest && !questCompleted){
+         var playerPos = player.position.clone();
+         var chestPos = chest.position.clone();
+         if(playerPos.distanceTo(chestPos) < 3){
+            hud.style.display = "block";
+            if(keys.e){
+               alert("Gefeliciteerd! Je hebt een Zwaard gekregen!");
+               chestOpened = true;
+               questCompleted = true;
+               scene.remove(chest);
+               hud.style.display = "none";
+               attachSword();
+               addToHotbar("Zwaard");
+               questUI.innerText = "Quest Completed!";
+            }
+         } else {
+            hud.style.display = "none";
+         }
+      }
+    }
+    
+    /************ Main Game Loop ************/
+    function animate(){
+      requestAnimationFrame(animate);
+      var delta = clock.getDelta();
+      
+      // Als het spel gepauzeerd is, update geen game logica
+      if(isPaused){
+         renderer.render(scene, camera);
+         return;
+      }
+      
+      player.rotation.y = playerYaw;
+      
+      var forward = new THREE.Vector3(-Math.sin(playerYaw), 0, -Math.cos(playerYaw));
+      var right = forward.clone().cross(new THREE.Vector3(0,1,0)).normalize();
+      
+      var baseSpeed = (keys.shift && stamina > 0) ? 40 : 20;
+      var speed = baseSpeed * delta;
+      if(keys.shift){
+         stamina -= 0.5 * delta * 60;
+      } else {
+         stamina += 0.2 * delta * 60;
+      }
+      stamina = Math.max(0, Math.min(100, stamina));
+      updateStamina();
+      
+      var newPos = player.position.clone();
+      if(keys.w) newPos.add(forward.clone().multiplyScalar(speed));
+      if(keys.s) newPos.add(forward.clone().multiplyScalar(-speed));
+      if(keys.a) newPos.add(right.clone().multiplyScalar(-speed));
+      if(keys.d) newPos.add(right.clone().multiplyScalar(speed));
+      
+      var groundLevel;
+      if(Math.abs(newPos.x) <= 100 && Math.abs(newPos.z) <= 100){
+         groundLevel = getTerrainHeight(newPos.x, newPos.z) + 1;
+      } else { groundLevel = 1; }
+      if(!isJumping){
+         if(keys.space){
+            verticalVelocity = jumpForce;
+            isJumping = true;
+         }
+         newPos.y = groundLevel;
+      } else {
+         newPos.y = player.position.y + verticalVelocity * delta;
+         verticalVelocity -= gravity * delta;
+         if(newPos.y <= groundLevel){
+            newPos.y = groundLevel;
+            verticalVelocity = 0;
+            isJumping = false;
+         }
+      }
+      
+      if(!checkCollision(newPos)){
+         player.position.copy(newPos);
+      }
+      
+      checkInteraction();
+      checkBounds();
+      
+      updateEnemies(delta);
+      
+      var cameraOffset = forward.clone().multiplyScalar(-5).add(new THREE.Vector3(0,3,0));
+      camera.position.copy(player.position).add(cameraOffset);
+      camera.lookAt(player.position);
+      
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+</html>

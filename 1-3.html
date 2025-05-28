@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <title>Zelda Game</title>
+  <link rel="icon" href="https://i.ibb.co/DfJSTmCx/download.jpg">
+  <!-- Three.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <!-- NippleJS voor virtuele joysticks -->
+  <script src="https://cdn.jsdelivr.net/npm/nipplejs@0.9.0/dist/nipplejs.min.js"></script>
+  <style>
+    /* Algemene styling */
+    body, html {
+      margin: 0;
+      overflow: hidden;
+      height: 100%;
+      background: #0099ff;
+      font-family: Arial, sans-serif;
+    }
+    /* UI-elementen */
+    #questUI,
+    .hud,
+    .stamina-bar,
+    .health-bar,
+    #hotbar,
+    #pauseButton {
+      position: absolute;
+      z-index: 2;
+    }
+    #questUI {
+      top: 10px;
+      left: 10px;
+      padding: 10px;
+      background: rgba(0,0,0,0.6);
+      color: white;
+      font-size: 16px;
+    }
+    .hud {
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px;
+      background: rgba(0,0,0,0.6);
+      color: white;
+      font-size: 20px;
+      display: none;
+    }
+    .stamina-bar {
+      bottom: 60px;
+      left: 10px;
+      width: 200px;
+      height: 20px;
+      background: red;
+      border: 2px solid white;
+    }
+    .stamina-bar-inner {
+      width: 100%;
+      height: 100%;
+      background: limegreen;
+    }
+    .health-bar {
+      top: 10px;
+      right: 10px;
+      width: 200px;
+      height: 20px;
+      background: red;
+      border: 2px solid white;
+    }
+    .health-bar-inner {
+      width: 100%;
+      height: 100%;
+      background: limegreen;
+    }
+    #hotbar {
+      bottom: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 5px;
+    }
+    .hotbar-slot {
+      width: 40px;
+      height: 40px;
+      border: 2px solid white;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 14px;
+    }
+    #pauseButton {
+      top: 10px;
+      right: 220px;
+      background: rgba(0,0,0,0.7);
+      color: white;
+      padding: 5px 10px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    /* Overlays */
+    #dialogueOverlay,
+    #miningOverlay,
+    #trainingOverlay,
+    #winOverlay,
+    #pauseOverlay {
+      position: absolute;
+      z-index: 6;
+      background: rgba(0,0,0,0.8);
+      padding: 20px;
+      color: white;
+      font-size: 18px;
+      display: none;
+    }
+    #dialogueOverlay {
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+    #dialogueOverlay button {
+      margin: 5px;
+      padding: 5px 10px;
+      cursor: pointer;
+    }
+    #miningOverlay {
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 16px;
+    }
+    #trainingOverlay {
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+    #winOverlay {
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 32px;
+    }
+    #pauseOverlay {
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 48px;
+      background: rgba(0,0,0,0.5);
+    }
+    /* Joystick zones voor touch */
+    #joystick-left, #joystick-right {
+      position: fixed;
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      z-index: 10;
+    }
+    #joystick-left { left: 20px; bottom: 20px; }
+    #joystick-right { right: 20px; bottom: 20px; }
+  </style>
+</head>
+<body>
+  <!-- UI Elementen -->
+  <div id="questUI">Quest: Smid – Ik heb 3 ijzer nodig voor een zwaard en schild!</div>
+  <div class="hud" id="hudMessage">Druk op E om te praten</div>
+  <div class="stamina-bar">
+    <div class="stamina-bar-inner" id="stamina"></div>
+  </div>
+  <div class="health-bar">
+    <div class="health-bar-inner" id="health"></div>
+  </div>
+  <div id="hotbar"></div>
+  <div id="pauseButton">Pause</div>
+  <div id="pauseOverlay">Paused</div>
+  
+  <!-- Overlays -->
+  <div id="dialogueOverlay">
+    <div id="dialogueText"></div>
+    <button id="dialogueYes">Ja</button>
+    <button id="dialogueNo">Nee</button>
+  </div>
+  <div id="miningOverlay">Klik op een rots om ijzer te minen!</div>
+  <div id="trainingOverlay">Druk op de toets "<span id="trainingKey"></span>" om de training te voltooien!</div>
+  <div id="winOverlay">Gefeliciteerd! Je hebt Prinses Zelda bevrijd!</div>
+
+  <!-- Joystick zones (worden enkel getoond op touch-apparaten) -->
+  <div id="joystick-left"></div>
+  <div id="joystick-right"></div>
+
+  <script>
+    /************ Detecteer Touch: ************/
+    const isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+    if (!isTouchDevice) {
+      document.getElementById("joystick-left").style.display = "none";
+      document.getElementById("joystick-right").style.display = "none";
+    }
+
+    // Variabelen voor touch joysticks
+    var touchMovement = new THREE.Vector2(0, 0);   // Linker joystick: beweging
+    var touchLookDelta = 0;                        // Rechter joystick: horizontale rotatie
+
+    if (isTouchDevice) {
+      // Linker joystick voor beweging
+      var joystickL = nipplejs.create({
+         zone: document.getElementById('joystick-left'),
+         mode: 'static',
+         position: { left: '50%', top: '50%' },
+         color: 'blue',
+         size: 100
+      });
+      joystickL.on('move', function(evt, data) {
+         if(data.vector) {
+            touchMovement.set(data.vector.x, data.vector.y);
+         }
+      });
+      joystickL.on('end', function(){
+         touchMovement.set(0, 0);
+      });
+      
+      // Rechter joystick voor camerabeweging ("om me heen kijken")
+      var joystickR = nipplejs.create({
+         zone: document.getElementById('joystick-right'),
+         mode: 'static',
+         position: { left: '50%', top: '50%' },
+         color: 'green',
+         size: 100
+      });
+      joystickR.on('move', function(evt, data) {
+         if(data.vector) {
+            // Gebruik alleen de horizontale component
+            touchLookDelta = data.vector.x;
+         }
+      });
+      joystickR.on('end', function(){
+         touchLookDelta = 0;
+      });
+    }
+
+    /************ Globale Variabelen ************/
+    var questCompleted = false;
+    var gameState = "village";  // Staten: "village", "mine", "villageAfterMine", "castleTraining", "battle", "win"
+    var collectedIron = 0;
+    var ironNodes = [];
+    var enemies = [];
+    var boss;
+
+    var stamina = 100;
+    var maxHealth = 100, playerHealth = 100;
+    var verticalVelocity = 0, jumpForce = 12, gravity = 30, isJumping = false;
+    var obstacles = [];
+    var treeColliders = [];
+
+    // Nieuwe interactie-flag (om herhaaldelijk triggeren te voorkomen)
+    var canInteract = true;
+
+    // UI-elementen referenties
+    var hud = document.getElementById("hudMessage");
+    var questUI = document.getElementById("questUI");
+    var hotbar = document.getElementById("hotbar");
+    var dialogueOverlay = document.getElementById("dialogueOverlay");
+    var dialogueText = document.getElementById("dialogueText");
+    var dialogueYes = document.getElementById("dialogueYes");
+    var dialogueNo = document.getElementById("dialogueNo");
+    var miningOverlay = document.getElementById("miningOverlay");
+    var trainingOverlay = document.getElementById("trainingOverlay");
+    var trainingKeySpan = document.getElementById("trainingKey");
+    var winOverlay = document.getElementById("winOverlay");
+    var pauseOverlay = document.getElementById("pauseOverlay");
+    var pauseButton = document.getElementById("pauseButton");
+
+    var isPaused = false;
+    pauseOverlay.style.display = "none";
+    pauseButton.innerText = "Pause";
+
+    function togglePause() {
+      isPaused = !isPaused;
+      if (isPaused) {
+         pauseOverlay.style.display = "flex";
+         pauseButton.innerText = "Resume";
+      } else {
+         pauseOverlay.style.display = "none";
+         pauseButton.innerText = "Pause";
+      }
+    }
+    document.addEventListener("keydown", function(e) {
+      if(e.key.toLowerCase() === "p") { togglePause(); }
+    });
+    pauseButton.addEventListener("click", togglePause);
+
+    function updateStamina() {
+      document.getElementById("stamina").style.width = stamina + "%";
+    }
+    function updateHealth() {
+      document.getElementById("health").style.width = (playerHealth / maxHealth * 100) + "%";
+    }
+
+    /************ Scene, Camera, Renderer, Clock ************/
+    var scene = new THREE.Scene();
+    var camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+    var renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x0099ff, 1);
+    document.body.appendChild(renderer.domElement);
+    window.addEventListener("resize", function(){
+      camera.aspect = window.innerWidth/window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+    var clock = new THREE.Clock();
+
+    /************ Pointer Lock & Muisinvoer (Desktop) ************/
+    renderer.domElement.addEventListener("click", function(){
+      renderer.domElement.requestPointerLock();
+    });
+    var playerYaw = 0, sensitivity = 0.002;
+    document.addEventListener("mousemove", function(event) {
+      if(document.pointerLockElement === renderer.domElement) {
+         playerYaw -= event.movementX * sensitivity;
+      }
+    });
+
+    /************ Besturing ************/
+    var keys = { w:false, a:false, s:false, d:false, shift:false, e:false, space:false };
+
+    document.addEventListener("keydown", function(event) {
+      // Registreer de E-toets speciaal
+      if(event.key.toLowerCase() === "e") { keys.e = true; }
+      if(event.code === "Space") { keys.space = true; }
+      else if(event.key.toLowerCase() !== "p") {
+         var k = event.key.toLowerCase();
+         if(keys.hasOwnProperty(k)) keys[k] = true;
+      }
+    });
+    
+    document.addEventListener("keyup", function(event) {
+         if(event.key.toLowerCase() === "e") { keys.e = false; }
+         if(event.code === "Space") { keys.space = false; }
+         else if(event.key.toLowerCase() !== "p") {
+            var k = event.key.toLowerCase();
+            if(keys.hasOwnProperty(k)) keys[k] = false;
+         }
+    });
+    
+    document.addEventListener("mousedown", function(event) {
+      if(event.button === 0) { swingSword(); }
+    });
+
+    /************ Verlichting ************/
+    var ambientLight = new THREE.AmbientLight(0x404040, 2);
+    scene.add(ambientLight);
+    var directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    directionalLight.position.set(5, 10, 5).normalize();
+    scene.add(directionalLight);
+
+    /************ Improved Noise (Perlin Noise) ************/
+    var ImprovedNoise = function(){
+         var p = new Uint8Array(512);
+         var permutation = [151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,
+                            8,99,37,240,21,10,23,190,6,148,247,120,234,75,0,26,197,62,94,252,219,203,117,35,
+                            11,32,57,177,33,88,237,149,56,87,174,20,125,136,171,168,68,175,74,165,71,134,139,48,
+                            27,166,77,146,158,231,83,111,229,122,60,211,133,230,220,105,92,41,55,46,245,40,244,102,
+                            143,54,65,25,63,161,1,216,80,73,209,76,132,187,208,89,18,169,200,196,135,130,116,188,159,
+                            86,164,100,109,198,173,186,3,64,52,217,226,250,124,123,5,202,38,147,118,126,255,82,85,
+                            212,207,206,59,227,47,16,58,17,182,189,28,42,223,183,170,213,119,248,152,2,44,154,163,
+                            70,221,153,101,155,167,43,172,9,129,22,39,253,19,98,108,110,79,113,224,232,178,185,112,
+                            104,218,246,97,228,251,34,242,193,238,210,144,12,191,179,162,241,81,51,145,235,249,14,239,
+                            107,49,192,214,31,181,199,106,157,184,84,204,176,115,121,50,45,127,4,150,254,138,236,205,
+                            93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180];
+         for(var i = 0; i < 256; i++){
+            p[i] = permutation[i];
+            p[256+i] = permutation[i];
+         }
+         function fade(t){ return t*t*t*(t*(t*6-15)+10); }
+         function lerp(t, a, b){ return a + t*(b-a); }
+         function grad(hash, x, y, z){
+            var h = hash & 15;
+            var u = h < 8 ? x : y;
+            var v = h < 4 ? y : (h===12 || h===14 ? x : z);
+            return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
+         }
+         this.noise = function(x, y, z){
+            var floorX = Math.floor(x), floorY = Math.floor(y), floorZ = Math.floor(z);
+            var X = floorX & 255, Y = floorY & 255, Z = floorZ & 255;
+            x -= floorX; y -= floorY; z -= floorZ;
+            var u = fade(x), v = fade(y), w = fade(z);
+            var A = p[X] + Y, AA = p[A] + Z, AB = p[A+1] + Z;
+            var B = p[X+1] + Y, BA = p[B] + Z, BB = p[B+1] + Z;
+            return lerp(w,
+               lerp(v,
+                  lerp(u, grad(p[AA], x, y, z), grad(p[BA], x-1, y, z)),
+                  lerp(u, grad(p[AB], x, y-1, z), grad(p[BB], x-1, y-1, z))
+               ),
+               lerp(v,
+                  lerp(u, grad(p[AA+1], x, y, z-1), grad(p[BA+1], x-1, y, z-1)),
+                  lerp(u, grad(p[AB+1], x, y-1, z-1), grad(p[BB+1], x-1, y-1, z-1))
+               )
+            );
+         };
+    };
+    var noise = new ImprovedNoise();
+
+    /************ Terrain Generation ************/
+    var terrainGeometry = new THREE.PlaneGeometry(200, 200, 199, 199);
+    terrainGeometry.rotateX(-Math.PI/2);
+    function getTerrainHeight(x, z){
+         return noise.noise(x/50, z/50, 0)*10;
+    }
+    var vertices = terrainGeometry.attributes.position;
+    for(var i = 0; i < vertices.count; i++){
+         var x = vertices.getX(i);
+         var z = vertices.getZ(i);
+         vertices.setY(i, getTerrainHeight(x, z));
+    }
+    vertices.needsUpdate = true;
+    terrainGeometry.computeVertexNormals();
+    var terrainMaterial = new THREE.MeshStandardMaterial({ color: 0x55aa55, flatShading:true });
+    var terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
+    scene.add(terrain);
+
+    /************ Trees ************/
+    function createTree(x, z){
+         var y = getTerrainHeight(x, z);
+         var trunkGeom = new THREE.CylinderGeometry(0.5, 0.5, 4, 8);
+         var trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+         var trunk = new THREE.Mesh(trunkGeom, trunkMat);
+         trunk.position.set(x, y+2, z);
+         scene.add(trunk);
+         var leavesGeom = new THREE.SphereGeometry(2, 8, 8);
+         var leavesMat = new THREE.MeshStandardMaterial({ color: 0x228B22 });
+         var leaves = new THREE.Mesh(leavesGeom, leavesMat);
+         leaves.position.set(x, y+4.5, z);
+         scene.add(leaves);
+         treeColliders.push({ pos: trunk.position.clone(), radius: 1.5 });
+    }
+    for(var i = 0; i < 30; i++){
+         var tx = Math.random()*200 - 100;
+         var tz = Math.random()*200 - 100;
+         createTree(tx, tz);
+    }
+
+    /************ Hotbar UI ************/
+    for(var i = 0; i < 10; i++){
+         var slot = document.createElement("div");
+         slot.className = "hotbar-slot";
+         slot.innerText = "";
+         hotbar.appendChild(slot);
+    }
+    var hotbarItems = new Array(10).fill(null);
+    function addToHotbar(item){
+         for(var i = 0; i < hotbarItems.length; i++){
+            if(!hotbarItems[i]){
+               hotbarItems[i] = item;
+               hotbar.children[i].innerText = item;
+               break;
+            }
+         }
+    }
+
+    /************ NPC Smith (Smid) ************/
+    function createSmid(){
+         var smidGroup = new THREE.Group();
+         // Body
+         var bodyGeom = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);
+         var bodyMat = new THREE.MeshStandardMaterial({ color: 0x663300 });
+         var bodyMesh = new THREE.Mesh(bodyGeom, bodyMat);
+         bodyMesh.position.y = 1;
+         smidGroup.add(bodyMesh);
+         // Head
+         var headGeom = new THREE.SphereGeometry(0.5, 16, 16);
+         var headMat = new THREE.MeshStandardMaterial({ color: 0xffcc99 });
+         var headMesh = new THREE.Mesh(headGeom, headMat);
+         headMesh.position.y = 2.5;
+         smidGroup.add(headMesh);
+         // Hat
+         var hatGeom = new THREE.ConeGeometry(0.6, 1, 16);
+         var hatMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
+         var hatMesh = new THREE.Mesh(hatGeom, hatMat);
+         hatMesh.position.y = 3.2;
+         smidGroup.add(hatMesh);
+         smidGroup.position.set(10, getTerrainHeight(10,10), 10);
+         scene.add(smidGroup);
+         return smidGroup;
+    }
+    var npcSmith = createSmid();
+
+    /************ Spawn Village Objects ************/
+    function createHouse(x, z){
+         var houseGroup = new THREE.Group();
+         // Basis
+         var baseGeom = new THREE.BoxGeometry(4, 3, 4);
+         var baseMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee });
+         var baseMesh = new THREE.Mesh(baseGeom, baseMat);
+         baseMesh.position.y = 1.5;
+         houseGroup.add(baseMesh);
+         // Dak
+         var roofGeom = new THREE.ConeGeometry(3.5, 2, 4);
+         var roofMat = new THREE.MeshStandardMaterial({ color: 0xaa0000 });
+         var roofMesh = new THREE.Mesh(roofGeom, roofMat);
+         roofMesh.rotation.y = Math.PI/4;
+         roofMesh.position.y = 4;
+         houseGroup.add(roofMesh);
+         var hy = getTerrainHeight(x, z);
+         houseGroup.position.set(x, hy, z);
+         scene.add(houseGroup);
+    }
+    function spawnVillage(){
+         var housePositions = [
+            { x: 5, z: 5 },
+            { x: 15, z: 5 },
+            { x: 10, z: 15 }
+         ];
+         for(var i = 0; i < housePositions.length; i++){
+            var pos = housePositions[i];
+            createHouse(pos.x, pos.z);
+         }
+    }
+    if(gameState === "village"){ spawnVillage(); }
+
+    /************ Player (Verbeterd Model) ************/
+    function createPlayer(){
+         var playerGroup = new THREE.Group();
+         // Lichaam
+         var bodyGeom = new THREE.CylinderGeometry(0.4, 0.4, 1.5, 16);
+         var bodyMat = new THREE.MeshStandardMaterial({ color: 0x0000ff });
+         var bodyMesh = new THREE.Mesh(bodyGeom, bodyMat);
+         bodyMesh.position.y = 0.75;
+         playerGroup.add(bodyMesh);
+         // Hoofd
+         var headGeom = new THREE.SphereGeometry(0.4, 16, 16);
+         var headMat = new THREE.MeshStandardMaterial({ color: 0xffcc99 });
+         var headMesh = new THREE.Mesh(headGeom, headMat);
+         headMesh.position.y = 1.9;
+         playerGroup.add(headMesh);
+         playerGroup.position.set(0, getTerrainHeight(0,0), 0);
+         scene.add(playerGroup);
+         return playerGroup;
+    }
+    var player = createPlayer();
+
+    /************ Chest ************/
+    var chestGeom = new THREE.BoxGeometry(1, 0.5, 1);
+    var chestMat = new THREE.MeshStandardMaterial({ color: 0xaa5522 });
+    var chest = new THREE.Mesh(chestGeom, chestMat);
+    var chestX = 50, chestZ = 50;
+    chest.position.set(chestX, getTerrainHeight(chestX, chestZ)+0.25, chestZ);
+    scene.add(chest);
+    var chestOpened = false;
+
+    /************ Sword & Swing Animation ************/
+    var swordAttached = false, sword;
+    function attachSword(){
+         if(swordAttached) return;
+         var swordGeom = new THREE.BoxGeometry(0.1, 1.5, 0.2);
+         var swordMat = new THREE.MeshStandardMaterial({ color: 0xcccccc });
+         sword = new THREE.Mesh(swordGeom, swordMat);
+         sword.position.set(0.6, 0.25, 0);
+         player.add(sword);
+         swordAttached = true;
+    }
+    var isSwinging = false;
+    function swingSword(){
+         if(!swordAttached || isSwinging) return;
+         isSwinging = true;
+         sword.rotation.x = -Math.PI/4;
+         attackEnemies();
+         setTimeout(function(){
+            sword.rotation.x = 0;
+            isSwinging = false;
+         },200);
+    }
+
+    /************ Sword Hit Detection & Damage Animation ************/
+    function attackEnemies(){
+         var attackRange = 3;
+         var damageAmount = 25;
+         for(var i = 0; i < enemies.length; i++){
+            var enemy = enemies[i];
+            var distance = enemy.position.distanceTo(player.position);
+            if(distance <= attackRange){
+               enemy.health -= damageAmount;
+               flashEnemyDamage(enemy);
+               if(enemy.health <= 0){
+                  scene.remove(enemy);
+                  enemies.splice(i, 1);
+                  i--;
+               }
+            }
+         }
+         if(gameState === "battle" && boss){
+            var d = boss.position.distanceTo(player.position);
+            if(d <= attackRange){
+               boss.health -= damageAmount;
+               flashEnemyDamage(boss);
+               if(boss.health <= 0){
+                  scene.remove(boss);
+                  boss = undefined;
+                  gameState = "win";
+                  winOverlay.style.display = "flex";
+               }
+            }
+         }
+    }
+    function flashEnemyDamage(enemy){
+         var originalColor = enemy.material.color.getHex();
+         enemy.material.color.set(0xffffff);
+         setTimeout(function(){
+            enemy.material.color.set(originalColor);
+         },100);
+    }
+
+    /************ Enemy Spawning & Updates ************/
+    function spawnEnemies(count){
+         for(var i = 0; i < count; i++){
+            var enemyGeom = new THREE.BoxGeometry(1, 1, 1);
+            var enemyMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+            var enemy = new THREE.Mesh(enemyGeom, enemyMat);
+            var ex, ez;
+            do{
+               ex = Math.random()*200 - 100;
+               ez = Math.random()*200 - 100;
+            } while((new THREE.Vector2(ex, ez))
+                      .distanceTo(new THREE.Vector2(player.position.x, player.position.z)) < 30);
+            var ey = getTerrainHeight(ex, ez)+1;
+            enemy.position.set(ex, ey, ez);
+            enemy.health = 50;
+            enemy.speed = 10;
+            scene.add(enemy);
+            enemies.push(enemy);
+         }
+    }
+    function updateEnemies(delta){
+         if(gameState === "battle"){
+            if(!boss){
+               var bossGeom = new THREE.BoxGeometry(3, 3, 3);
+               var bossMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+               boss = new THREE.Mesh(bossGeom, bossMat);
+               boss.health = 300;
+               var bx = 85, bz = 85;
+               var by = getTerrainHeight(bx, bz)+1;
+               boss.position.set(bx, by, bz);
+               scene.add(boss);
+            }
+            if(boss){
+               var dir = new THREE.Vector3().subVectors(player.position, boss.position);
+               var dist = dir.length();
+               dir.normalize();
+               boss.position.add(dir.multiplyScalar(5 * delta));
+               if(dist < 3){
+                  var damage = 20 * delta;
+                  playerHealth -= damage;
+                  updateHealth();
+                  if(playerHealth <= 0){
+                     alert("Game Over!");
+                     location.reload();
+                  }
+               }
+            }
+         } else {
+            if(gameState !== "battle" && enemies.length === 0 && questCompleted){
+               spawnEnemies(3);
+            }
+            for(var i = 0; i < enemies.length; i++){
+               var enemy = enemies[i];
+               var dvec = new THREE.Vector3().subVectors(player.position, enemy.position);
+               var dist = dvec.length();
+               dvec.normalize();
+               enemy.position.add(dvec.multiplyScalar(enemy.speed * delta));
+               if(dist < 2){
+                  var damage = 10 * delta;
+                  playerHealth -= damage;
+                  updateHealth();
+                  if(playerHealth <= 0){
+                     alert("Game Over!");
+                     location.reload();
+                  }
+               }
+            }
+         }
+    }
+
+    /************ Collision Detection ************/
+    var playerRadius = 0.5;
+    function checkCollision(newPos){
+         var collision = false;
+         if(obstacles.length > 0){
+            for(var i = 0; i < obstacles.length; i++){
+               if(newPos.distanceTo(obstacles[i].position) < 1.5){
+                  collision = true;
+                  break;
+               }
+            }
+         }
+         for(var j = 0; j < treeColliders.length; j++){
+            var tree = treeColliders[j];
+            if(newPos.distanceTo(tree.pos) < (playerRadius + tree.radius)){
+               collision = true;
+               break;
+            }
+         }
+         return collision;
+    }
+
+    /************ Map Bounds & Falling ************/
+    function checkBounds(){
+         if(player.position.y < -20){
+            player.position.set(0, getTerrainHeight(0, 0)+1, 0);
+         }
+    }
+
+    /************ INTERACTIES (Verbeterde Quest Interactie) ************/
+    function checkInteraction(){
+         // In de "village" state
+         if(gameState === "village"){
+            var distToSmith = player.position.distanceTo(npcSmith.position);
+            if(distToSmith < 5 && keys.e && dialogueOverlay.style.display === "none" && canInteract){
+               dialogueText.innerText = "Smid: Heb je 3 stukken ijzer voor mij? (Ja/Nee)";
+               dialogueOverlay.style.display = "block";
+               canInteract = false;
+               keys.e = false;
+               setTimeout(() => { canInteract = true; }, 2000);
+            }
+         }
+         // In de "villageAfterMine" state
+         if(gameState === "villageAfterMine"){
+            var distToSmith = player.position.distanceTo(npcSmith.position);
+            if(distToSmith < 5 && keys.e && dialogueOverlay.style.display === "none" && canInteract){
+               dialogueText.innerText = "Smid: Dank je! Hier is je zwaard en schild.";
+               dialogueOverlay.style.display = "block";
+               canInteract = false;
+               keys.e = false;
+               setTimeout(() => { canInteract = true; }, 2000);
+            }
+         }
+    }
+    dialogueYes.addEventListener("click", function(){
+         if(gameState === "village"){
+            dialogueOverlay.style.display = "none";
+            gameState = "mine";
+            player.position.set(-70, getTerrainHeight(-70, -70)+1, -70);
+            collectedIron = 0;
+            spawnIronNodes();
+         }
+         else if(gameState === "villageAfterMine"){
+            dialogueOverlay.style.display = "none";
+            addToHotbar("Zwaard");
+            addToHotbar("Schild");
+            player.position.set(80, getTerrainHeight(80, 80)+1, 80);
+            gameState = "castleTraining";
+            startTrainingMiniGame();
+         }
+    });
+    dialogueNo.addEventListener("click", function(){
+         dialogueOverlay.style.display = "none";
+    });
+
+    /************ Iron Mining in de Mijn ************/
+    function spawnIronNodes(){
+         for(var i = 0; i < 3; i++){
+            var ironGeom = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+            var ironMat = new THREE.MeshStandardMaterial({ color: 0x999999 });
+            var ironNode = new THREE.Mesh(ironGeom, ironMat);
+            var ix = -70 + Math.random()*10 - 5;
+            var iz = -70 + Math.random()*10 - 5;
+            var iy = getTerrainHeight(ix, iz) + 0.4;
+            ironNode.position.set(ix, iy, iz);
+            scene.add(ironNode);
+            ironNodes.push(ironNode);
+         }
+         miningOverlay.style.display = "block";
+    }
+    function updateIronNodes(){
+         for(var i = 0; i < ironNodes.length; i++){
+            var node = ironNodes[i];
+            var d = node.position.distanceTo(player.position);
+            if(d < 3){
+               scene.remove(node);
+               ironNodes.splice(i, 1);
+               i--;
+               collectedIron++;
+               addToHotbar("Ijzer");
+            }
+         }
+         if(collectedIron >= 3){
+            miningOverlay.style.display = "none";
+            player.position.set(10, getTerrainHeight(10, 10)+1, 10);
+            gameState = "villageAfterMine";
+         }
+    }
+
+    /************ Training Mini-game ************/
+    var trainingKey = "";
+    function startTrainingMiniGame(){
+         var keysArr = ["a", "s", "d", "w"];
+         trainingKey = keysArr[Math.floor(Math.random()*keysArr.length)];
+         trainingKeySpan.innerText = trainingKey.toUpperCase();
+         trainingOverlay.style.display = "flex";
+    }
+    document.addEventListener("keydown", function(e){
+         if(gameState === "castleTraining"){
+            if(e.key.toLowerCase() === trainingKey){
+               trainingOverlay.style.display = "none";
+               addToHotbar("Harnas");
+               player.position.set(85, getTerrainHeight(85, 85)+1, 85);
+               gameState = "battle";
+            }
+         }
+    });
+
+    /************ Final Boss & Win ************/
+    function spawnBoss(){
+         var bossGeom = new THREE.BoxGeometry(3, 3, 3);
+         var bossMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+         boss = new THREE.Mesh(bossGeom, bossMat);
+         boss.health = 300;
+         var bx = 85, bz = 85;
+         var by = getTerrainHeight(bx, bz)+1;
+         boss.position.set(bx, by, bz);
+         scene.add(boss);
+    }
+
+    /************ Main Game Loop ************/
+    function animate(){
+         requestAnimationFrame(animate);
+         var delta = clock.getDelta();
+
+         if(isPaused){
+            renderer.render(scene, camera);
+            return;
+         }
+         
+         // Health regeneratie
+         playerHealth = Math.min(maxHealth, playerHealth + 2 * delta);
+         updateHealth();
+
+         if(gameState === "mine"){
+            updateIronNodes();
+         }
+         if(gameState === "battle" && !boss){
+            spawnBoss();
+         }
+
+         // Gebruik muis en toetsen als desktop, maar voeg ook touch joystick invoer toe indien aanwezig
+         var forward = new THREE.Vector3(-Math.sin(playerYaw), 0, -Math.cos(playerYaw));
+         var right = forward.clone().cross(new THREE.Vector3(0,1,0)).normalize();
+         
+         // Bereken snelheid (standaard toetsenbord)
+         var baseSpeed = (keys.shift && stamina > 0) ? 40 : 20;
+         var speed = baseSpeed * delta;
+         var newPos = player.position.clone();
+         if(keys.w){ newPos.add(forward.clone().multiplyScalar(speed)); }
+         if(keys.s){ newPos.add(forward.clone().multiplyScalar(-speed)); }
+         if(keys.a){ newPos.add(right.clone().multiplyScalar(-speed)); }
+         if(keys.d){ newPos.add(right.clone().multiplyScalar(speed)); }
+
+         // Als touch besturing actief is, voeg touch joystick beweging toe
+         if(isTouchDevice) {
+            var touchSpeed = 40 * delta; // Aanpasbare gevoeligheid voor de joystick beweging
+            // touchMovement.x en .y variëren van -1 tot 1
+            newPos.add(right.clone().multiplyScalar(touchMovement.x * touchSpeed));
+            newPos.add(forward.clone().multiplyScalar(-touchMovement.y * touchSpeed));
+            // Camerarotatie aanpassen met de rechter joystick
+            playerYaw -= touchLookDelta * 0.05; // Pas de gevoeligheid hier aan
+         }
+
+         // Spring-logica
+         var groundLevel = (Math.abs(newPos.x) <= 100 && Math.abs(newPos.z) <= 100) ?
+                           getTerrainHeight(newPos.x, newPos.z) + 1 : 1;
+         if(!isJumping){
+            if(keys.space){
+               verticalVelocity = jumpForce;
+               isJumping = true;
+            }
+            newPos.y = groundLevel;
+         } else {
+            newPos.y = player.position.y + verticalVelocity * delta;
+            verticalVelocity -= gravity * delta;
+            if(newPos.y <= groundLevel){
+               newPos.y = groundLevel;
+               verticalVelocity = 0;
+               isJumping = false;
+            }
+         }
+         if(!checkCollision(newPos)){
+            player.position.copy(newPos);
+         }
+         checkInteraction();
+         checkBounds();
+         updateEnemies(delta);
+         
+         var cameraOffset = forward.clone().multiplyScalar(-5).add(new THREE.Vector3(0, 3, 0));
+         camera.position.copy(player.position).add(cameraOffset);
+         camera.lookAt(player.position);
+         
+         renderer.render(scene, camera);
+    }
+    animate();
+
+    /************ Collision Detection & Falling ************/
+    function checkBounds(){
+         if(player.position.y < -20){
+            player.position.set(0, getTerrainHeight(0,0)+1, 0);
+         }
+    }
+    // Eenvoudige collision functie hierboven gedefinieerd in checkCollision()
+
+    /************ Touch Control Event Listener Helper ************/
+    function addTouchListener(buttonId, keyName) {
+      const btn = document.getElementById(buttonId);
+      if(btn){
+         btn.addEventListener("touchstart", function(e){
+            keys[keyName] = true;
+            e.preventDefault();
+         });
+         btn.addEventListener("touchend", function(e){
+            keys[keyName] = false;
+            e.preventDefault();
+         });
+         btn.addEventListener("touchcancel", function(e){
+            keys[keyName] = false;
+            e.preventDefault();
+         });
+      }
+    }
+    // Indien er extra touch knoppen (als fallback) nodig zijn, kun je hier listeners toevoegen.
+  </script>
+</body>
+</html>
