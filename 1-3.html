@@ -886,14 +886,6 @@
     }
     animate();
 
-    /************ Collision Detection & Falling ************/
-    function checkBounds(){
-         if(player.position.y < -20){
-            player.position.set(0, getTerrainHeight(0,0)+1, 0);
-         }
-    }
-    // Eenvoudige collision functie hierboven gedefinieerd in checkCollision()
-
     /************ Touch Control Event Listener Helper ************/
     function addTouchListener(buttonId, keyName) {
       const btn = document.getElementById(buttonId);
