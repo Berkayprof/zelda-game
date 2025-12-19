@@ -4,8 +4,6 @@
   <meta charset="UTF-8">
   <title>Zelda Game</title>
   <link rel="icon" href="https://i.ibb.co/DfJSTmCx/download.jpg">
-  <!-- Three.js CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
   <!-- NippleJS voor virtuele joysticks -->
   <script src="https://cdn.jsdelivr.net/npm/nipplejs@0.9.0/dist/nipplejs.min.js"></script>
   <style>
@@ -191,7 +189,8 @@
   <div id="joystick-left"></div>
   <div id="joystick-right"></div>
 
-  <script>
+  <script type="module">
+    import * as THREE from 'three';
     /************ Detecteer Touch: ************/
     const isTouchDevice = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
     if (!isTouchDevice) {
@@ -723,7 +722,6 @@
                setTimeout(() => { canInteract = true; }, 2000);
             }
          }
-    }
     dialogueYes.addEventListener("click", function(){
          if(gameState === "village"){
             dialogueOverlay.style.display = "none";
@@ -967,7 +965,6 @@ function debugSmithInteraction() {
   });
 }
 
-gameLoop();
 </script>
 </body>
 </html>
