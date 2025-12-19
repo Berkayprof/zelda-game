@@ -712,18 +712,6 @@
     }
 
     /************ INTERACTIES (Verbeterde Quest Interactie) ************/
-    function checkInteraction(){
-         // In de "village" state
-         if(gameState === "village"){
-            var distToSmith = player.position.distanceTo(npcSmith.position);
-            if(distToSmith < 5 && keys.e && dialogueOverlay.style.display === "none" && canInteract){
-               dialogueText.innerText = "Smid: Heb je 3 stukken ijzer voor mij? (Ja/Nee)";
-               dialogueOverlay.style.display = "block";
-               canInteract = false;
-               keys.e = false;
-               setTimeout(() => { canInteract = true; }, 2000);
-            }
-         }
          // In de "villageAfterMine" state
          if(gameState === "villageAfterMine"){
             var distToSmith = player.position.distanceTo(npcSmith.position);
@@ -824,6 +812,7 @@
 
     /************ Main Game Loop ************/
     function animate(){
+         checkSmithInteraction();
          requestAnimationFrame(animate);
          var delta = clock.getDelta();
 
@@ -927,5 +916,58 @@
     }
     // Indien er extra touch knoppen (als fallback) nodig zijn, kun je hier listeners toevoegen.
   </script>
+  <script>
+// --- Key handling ---
+const keys = {};
+document.addEventListener("keydown", e => {
+  if (e.key.toLowerCase() === "e") keys.e = true;
+});
+document.addEventListener("keyup", e => {
+  if (e.key.toLowerCase() === "e") keys.e = false;
+});
+
+// --- Dialogue overlay element ---
+const dialogueOverlay = document.getElementById("dialogueOverlay"); 
+// Let op: check dat je HTML id="dialogueOverlay" heet en niet "dialogue-overlay"!
+// Pas dit aan zodat het overeenkomt met jouw HTML.
+
+let canInteract = true;
+
+// --- Interactie met smid ---
+function checkSmithInteraction() {
+  // Bereken afstand speler <-> smid
+  const distToSmith = player.position.distanceTo(smith.position);
+
+  if (
+    distToSmith < 5 &&
+    keys.e &&
+    dialogueOverlay.style.display === "none" &&
+    canInteract
+  ) {
+    // Open dialoog
+    dialogueOverlay.style.display = "block";
+    dialogueOverlay.innerHTML = "<p>Hallo! Kun je 3 stukken ijzer voor me vinden?</p>";
+    canInteract = false; // blokkeer herhaald triggeren
+  }
+}
+
+// --- Sluit dialoog en reset interactie ---
+function closeDialogue() {
+  dialogueOverlay.style.display = "none";
+  canInteract = true;
+}
+
+// --- Debug helper (optioneel) ---
+function debugSmithInteraction() {
+  console.log({
+    distToSmith,
+    ePressed: keys.e,
+    overlayHidden: dialogueOverlay.style.display === "none",
+    canInteract
+  });
+}
+
+gameLoop();
+</script>
 </body>
 </html>
