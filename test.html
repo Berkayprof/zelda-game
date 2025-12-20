@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Test Zelda Game</title>
-  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+  <title>Zelda Test Game (ESM)</title>
   <style>
     html, body {
       margin: 0;
@@ -12,47 +11,55 @@
       overflow: hidden;
       height: 100%;
       background: #000;
+      font-family: sans-serif;
     }
     #info {
       position: absolute;
       top: 10px;
       left: 10px;
       color: white;
-      font-family: sans-serif;
       background: rgba(0,0,0,0.5);
       padding: 10px;
       border-radius: 8px;
+      z-index: 10;
     }
   </style>
 </head>
 <body>
-  <div id="info">Gebruik muis om rond te kijken. WASD om te bewegen.</div>
-  <script>
-    // Scene setup
+  <div id="info">Klik om te starten. WASD = lopen, muis = kijken.</div>
+
+  <!-- ES MODULE SCRIPT -->
+  <script type="module">
+    import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+    import { PointerLockControls } from "https://unpkg.com/three@0.160.0/examples/jsm/controls/PointerLockControls.js";
+
+    // Scene
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x1e1e1e);
 
+    // Camera
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
     camera.position.set(0, 2, 5);
 
-    const renderer = new THREE.WebGLRenderer();
+    // Renderer
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
     // Licht
     const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(5, 10, 7.5);
+    light.position.set(5, 10, 7);
     scene.add(light);
 
     // Grond
     const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(100, 100),
+      new THREE.PlaneGeometry(200, 200),
       new THREE.MeshStandardMaterial({ color: 0x2a5298 })
     );
     ground.rotation.x = -Math.PI / 2;
     scene.add(ground);
 
-    // Smid (NPC)
+    // Smid
     const smith = new THREE.Mesh(
       new THREE.BoxGeometry(1, 2, 1),
       new THREE.MeshStandardMaterial({ color: 0xbb3e03 })
@@ -60,43 +67,41 @@
     smith.position.set(2, 1, 2);
     scene.add(smith);
 
-    // Speler (camera als hoofd)
-    const player = new THREE.Object3D();
-    player.add(camera);
-    scene.add(player);
-
     // Controls
-    const keys = {};
-    document.addEventListener('keydown', e => keys[e.code] = true);
-    document.addEventListener('keyup', e => keys[e.code] = false);
+    const controls = new PointerLockControls(camera, document.body);
 
-    // Beweging
-    function updatePlayer(delta) {
+    document.body.addEventListener("click", () => {
+      controls.lock();
+    });
+
+    // Movement
+    const keys = {};
+    document.addEventListener("keydown", e => keys[e.code] = true);
+    document.addEventListener("keyup", e => keys[e.code] = false);
+
+    function updateMovement(delta) {
       const speed = 5;
-      const direction = new THREE.Vector3();
-      if (keys['KeyW']) direction.z -= 1;
-      if (keys['KeyS']) direction.z += 1;
-      if (keys['KeyA']) direction.x -= 1;
-      if (keys['KeyD']) direction.x += 1;
-      direction.normalize().multiplyScalar(speed * delta);
-      player.position.add(direction);
+      if (keys["KeyW"]) controls.moveForward(speed * delta);
+      if (keys["KeyS"]) controls.moveForward(-speed * delta);
+      if (keys["KeyA"]) controls.moveRight(-speed * delta);
+      if (keys["KeyD"]) controls.moveRight(speed * delta);
     }
 
     // Render loop
-    let lastTime = performance.now();
+    let last = performance.now();
     function animate(now) {
       requestAnimationFrame(animate);
-      const delta = (now - lastTime) / 1000;
-      lastTime = now;
+      const delta = (now - last) / 1000;
+      last = now;
 
-      updatePlayer(delta);
+      updateMovement(delta);
       renderer.render(scene, camera);
     }
     animate();
 
     // Resize
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth/window.innerHeight;
+    window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
