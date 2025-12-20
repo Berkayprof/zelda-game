@@ -1,926 +1,577 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-  <meta charset="UTF-8">
-  <title>Zelda Game</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Zelda-achtige Game</title>
   <link rel="icon" href="https://i.ibb.co/DfJSTmCx/download.jpg">
   <!-- Three.js CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.160.0/examples/js/controls/PointerLockControls.js"></script>
+  <!-- NippleJS (optioneel voor mobiel) -->
+  <script src="https://cdn.jsdelivr.net/npm/nipplejs@0.9.0/dist/nipplejs.min.js"></script>
   <style>
-    /* Algemene styling */
-    body, html {
-      margin: 0;
-      overflow: hidden;
-      height: 100%;
-      background: #0099ff;
-      font-family: Arial, sans-serif;
+    /* Canvas & layout */
+    html, body {
+      margin:0; padding:0; height:100%; overflow:hidden; background:#0f172a; font-family:system-ui, Arial, sans-serif;
     }
-    /* UI-elementen */
-    #questUI,
-    .hud,
-    .stamina-bar,
-    .health-bar,
-    #hotbar,
-    #pauseButton {
-      position: absolute;
-      font-family: Arial, sans-serif;
-      z-index: 2;
+    #hud {
+      position:fixed; top:10px; left:10px; right:10px; display:flex; align-items:center; gap:12px; z-index:10;
     }
-    #questUI {
-      top: 10px;
-      left: 10px;
-      padding: 10px;
-      background: rgba(0,0,0,0.6);
-      color: white;
-      font-size: 16px;
+    .bar {
+      height:16px; background:#1f2937; border-radius:8px; overflow:hidden; width:180px; border:1px solid #334155;
     }
-    .hud {
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      padding: 10px;
-      background: rgba(0,0,0,0.6);
-      color: white;
-      font-size: 20px;
-      display: none;
-    }
-    .stamina-bar {
-      bottom: 60px;
-      left: 10px;
-      width: 200px;
-      height: 20px;
-      background: red;
-      border: 2px solid white;
-    }
-    .stamina-bar-inner {
-      height: 100%;
-      width: 100%;
-      background: limegreen;
-    }
-    .health-bar {
-      top: 10px;
-      right: 10px;
-      width: 200px;
-      height: 20px;
-      background: red;
-      border: 2px solid white;
-    }
-    .health-bar-inner {
-      height: 100%;
-      width: 100%;
-      background: limegreen;
-    }
+    .bar-fill { height:100%; width:0%; transition:width .15s; }
+    .bar.health .bar-fill { background:#ef4444; }
+    .bar.stamina .bar-fill { background:#22c55e; }
     #hotbar {
-      bottom: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 5px;
+      display:flex; gap:8px; align-items:center;
     }
-    .hotbar-slot {
-      width: 40px;
-      height: 40px;
-      border: 2px solid white;
-      background: rgba(0,0,0,0.6);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 14px;
-      color: white;
+    .slot {
+      width:36px; height:36px; border:2px solid #64748b; border-radius:6px; background:#0b1220; display:flex; align-items:center; justify-content:center; color:#94a3b8; font-weight:bold;
     }
-    #pauseButton {
-      top: 10px;
-      right: 220px;
-      background: rgba(0,0,0,0.7);
-      color: white;
-      padding: 5px 10px;
-      cursor: pointer;
-      font-size: 14px;
+    #quest {
+      margin-left:auto; padding:8px 12px; background:#111827cc; color:#e5e7eb; border:1px solid #374151; border-radius:8px; font-size:14px;
     }
-    /* Overlays */
-    #dialogueOverlay {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%,-50%);
-      background: rgba(0,0,0,0.8);
-      padding: 20px;
-      color: white;
-      font-size: 18px;
-      z-index: 6;
-      padding: 15px;
-      border-radius: 15px;
-      display: none;
+    #overlay {
+      position:fixed; inset:0; background:#000000cc; color:#fff; display:none; align-items:center; justify-content:center; flex-direction:column; gap:12px; z-index:20; text-align:center; padding:20px;
     }
-    #dialogueOverlay button {
-      margin: 5px;
-      padding: 5px 10px;
-      cursor: pointer;
+    #overlay h2 { margin:0 0 8px 0; }
+    #dialog {
+      position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#111827cc; color:#fff; border:1px solid #374151; border-radius:10px; padding:12px 16px; display:none; z-index:15; max-width:80%;
     }
-    #miningOverlay {
-      position: absolute;
-      bottom: 100px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.8);
-      padding: 10px;
-      color: white;
-      font-size: 16px;
-      z-index: 6;
-      display: none;
+    #pauseBtn {
+      position:fixed; top:10px; right:10px; z-index:15; padding:8px 12px; border:1px solid #374151; border-radius:8px; background:#111827cc; color:#e5e7eb; cursor:pointer;
     }
-    #trainingOverlay {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%,-50%);
-      background: rgba(0,0,0,0.8);
-      padding: 20px;
-      color: white;
-      font-size: 18px;
-      z-index: 6;
-      display: none;
+    #mobile-controls {
+      position:fixed; bottom:10px; left:10px; right:10px; display:flex; justify-content:space-between; z-index:12; pointer-events:auto;
     }
-    #winOverlay {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%,-50%);
-      background: rgba(0,0,0,0.8);
-      padding: 20px;
-      color: white;
-      font-size: 32px;
-      z-index: 6;
-      display: none;
+    #left-stick, #right-stick {
+      width:140px; height:140px; background:#0b122020; border:1px dashed #334155; border-radius:50%;
     }
-    #pauseOverlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.5);
-      color: white;
-      font-size: 48px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 5;
-      display: none;
+    /* Tips */
+    #tips {
+      position:fixed; bottom:10px; right:10px; z-index:13; background:#111827cc; color:#e5e7eb; border:1px solid #374151; border-radius:8px; padding:8px 12px; font-size:12px;
     }
   </style>
 </head>
 <body>
-  <!-- UI-elementen -->
-  <div id="questUI">Quest: Smid – Ik heb 3 ijzer nodig voor een zwaard en schild!</div>
-  <div class="hud" id="hudMessage">Druk op E om te praten</div>
-  <div class="stamina-bar">
-    <div class="stamina-bar-inner" id="stamina"></div>
+  <button id="pauseBtn">Pauze</button>
+  <div id="hud">
+    <div class="bar health"><div id="healthFill" class="bar-fill"></div></div>
+    <div class="bar stamina"><div id="staminaFill" class="bar-fill"></div></div>
+    <div id="hotbar">
+      <div class="slot" title="Slot 1">1</div>
+      <div class="slot" title="Slot 2">2</div>
+      <div class="slot" title="Slot 3">3</div>
+      <div class="slot" title="Slot 4">4</div>
+    </div>
+    <div id="quest">Zoek de smid in het dorp (E om te praten)</div>
   </div>
-  <div class="health-bar">
-    <div class="health-bar-inner" id="health"></div>
+  <div id="dialog"></div>
+  <div id="overlay"></div>
+  <div id="tips">
+    <div><b>Besturing:</b> WASD lopen, Shift sprint, muisklik zwaard, E praten</div>
+    <div><b>Doel:</b> Voltooi quest → mijn → training → battle → eindbaas</div>
   </div>
-  <div id="hotbar"></div>
-  <div id="pauseButton">Pause</div>
-  <div id="pauseOverlay">Paused</div>
-  
-  <!-- Overlays voor interactie, mijn, training & win -->
-  <div id="dialogueOverlay">
-    <div id="dialogueText"></div>
-    <button id="dialogueYes">Ja</button>
-    <button id="dialogueNo">Nee</button>
+  <div id="mobile-controls" style="display:none;">
+    <div id="left-stick"></div>
+    <div id="right-stick"></div>
   </div>
-  <div id="miningOverlay">Klik op een rots om ijzer te minen!</div>
-  <div id="trainingOverlay">Druk op de toets "<span id="trainingKey"></span>" om de training te voltooien!</div>
-  <div id="winOverlay">Gefeliciteerd! Je hebt Prinses Zelda bevrijd!</div>
-  
   <script>
-    /************ Globale Variabelen ************/
-    var questCompleted = false;
-    var gameState = "village";  // Staten: "village", "mine", "villageAfterMine", "castleTraining", "battle", "win"
-    var collectedIron = 0;
-    var ironNodes = [];
-    var enemies = [];
-    var boss;
+    // ====== Basis setup ======
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0f172a);
+    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 500);
+    const renderer = new THREE.WebGLRenderer({ antialias:true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
 
-    var stamina = 100;
-    var maxHealth = 100, playerHealth = 100;
-    var verticalVelocity = 0, jumpForce = 12, gravity = 30, isJumping = false;
-    var obstacles = [];
-    var treeColliders = [];
+    const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambient);
+    const dir = new THREE.DirectionalLight(0xffffff, 0.7);
+    dir.position.set(30,50,30);
+    scene.add(dir);
 
-    // Nieuwe interactie-flag zodat niet continu wordt getriggerd
-    var canInteract = true;
+    // Grond
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(200,200), new THREE.MeshStandardMaterial({ color:0x264653 }));
+    ground.rotation.x = -Math.PI/2;
+    ground.receiveShadow = true;
+    scene.add(ground);
 
-    // UI-elementen
-    var hud = document.getElementById("hudMessage");
-    var questUI = document.getElementById("questUI");
-    var hotbar = document.getElementById("hotbar");
-    var dialogueOverlay = document.getElementById("dialogueOverlay");
-    var dialogueText = document.getElementById("dialogueText");
-    var dialogueYes = document.getElementById("dialogueYes");
-    var dialogueNo = document.getElementById("dialogueNo");
-    var miningOverlay = document.getElementById("miningOverlay");
-    var trainingOverlay = document.getElementById("trainingOverlay");
-    var trainingKeySpan = document.getElementById("trainingKey");
-    var winOverlay = document.getElementById("winOverlay");
-    var pauseOverlay = document.getElementById("pauseOverlay");
-    var pauseButton = document.getElementById("pauseButton");
+    // Simpele bomen/obstakels (collision)
+    const obstacles = [];
+    function addObstacle(x,z) {
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.6,3,12), new THREE.MeshStandardMaterial({ color:0x8d5524 }));
+      trunk.position.set(x,1.5,z);
+      const crown = new THREE.Mesh(new THREE.SphereGeometry(2.2,16,16), new THREE.MeshStandardMaterial({ color:0x2a9d8f }));
+      crown.position.set(x,4,z);
+      const group = new THREE.Group();
+      group.add(trunk); group.add(crown);
+      group.userData = { aabb: new THREE.Box3().setFromObject(group) };
+      scene.add(group);
+      obstacles.push(group);
+    }
+    for (let i=0;i<12;i++) addObstacle((Math.random()*160-80)|0, (Math.random()*160-80)|0);
 
-    var isPaused = false;
-    pauseOverlay.style.display = "none";
-    pauseButton.innerText = "Pause";
-    
-    fixInteraction();
-    
-    function togglePause() {
-      isPaused = !isPaused;
-      if (isPaused) {
-        pauseOverlay.style.display = "flex";
-        pauseButton.innerText = "Resume";
-      } else {
-        pauseOverlay.style.display = "none";
-        pauseButton.innerText = "Pause";
+    // Dorp platform en smid
+    const village = new THREE.Mesh(new THREE.CircleGeometry(25, 32), new THREE.MeshStandardMaterial({ color:0x386641 }));
+    village.rotation.x = -Math.PI/2; village.position.set(0,0.001,0);
+    scene.add(village);
+
+    const smith = new THREE.Mesh(new THREE.BoxGeometry(1.2,2,1.2), new THREE.MeshStandardMaterial({ color:0xbb3e03 }));
+    smith.position.set(2,1,2);
+    smith.userData.npc = true;
+    scene.add(smith);
+
+    // Speler
+    const player = new THREE.Object3D(); // camera as head
+    player.position.set(0,1.7,0);
+    camera.position.set(0,0,0);
+    player.add(camera);
+    scene.add(player);
+
+    // Pointer lock controls (mouse look)
+    const controls = new THREE.PointerLockControls(camera, document.body);
+    document.body.addEventListener('click', () => {
+      if (!paused) controls.lock();
+    });
+    controls.getObject().position.copy(player.position);
+
+    // HUD/overlay helpers
+    const overlay = document.getElementById('overlay');
+    const dialog = document.getElementById('dialog');
+    const quest = document.getElementById('quest');
+    const healthFill = document.getElementById('healthFill');
+    const staminaFill = document.getElementById('staminaFill');
+
+    // ====== Game state ======
+    const STATE = {
+      VILLAGE: 'VILLAGE',
+      MINE: 'MINE',
+      REWARD: 'REWARD',
+      TRAINING: 'TRAINING',
+      BATTLE: 'BATTLE',
+      BOSS: 'BOSS',
+      WIN: 'WIN'
+    };
+    let state = STATE.VILLAGE;
+
+    const stats = {
+      health: 100, maxHealth: 100,
+      stamina: 100, maxStamina: 100,
+      hasSword: false, hasShield: false, hasArmor: false
+    };
+
+    function updateBars() {
+      healthFill.style.width = (stats.health / stats.maxHealth * 100) + '%';
+      staminaFill.style.width = (stats.stamina / stats.maxStamina * 100) + '%';
+    }
+
+    // ====== Input ======
+    const keys = {};
+    document.addEventListener('keydown', (e) => {
+      keys[e.code] = true;
+      if (state === STATE.TRAINING && trainingPrompt && e.code === trainingPrompt.expected) {
+        completeTraining();
+      }
+      if (e.code === 'KeyE') tryTalkSmith();
+      if (e.code === 'Escape') togglePause();
+    });
+    document.addEventListener('keyup', (e) => keys[e.code] = false);
+
+    // Mouse attack
+    let attackCooldown = 0;
+    document.addEventListener('mousedown', () => {
+      if (paused) return;
+      if (!stats.hasSword) return;
+      if (attackCooldown > 0) return;
+      attackCooldown = 0.4;
+      swingSword();
+    });
+
+    // ====== Movement & collision ======
+    const walkSpeed = 4;
+    const sprintMultiplier = 1.8;
+
+    function desiredMoveVector(dt) {
+      const forward = new THREE.Vector3();
+      controls.getDirection(forward);
+      forward.y = 0; forward.normalize();
+
+      const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0,1,0)).negate();
+
+      let v = new THREE.Vector3();
+      if (keys['KeyW']) v.add(forward);
+      if (keys['KeyS']) v.sub(forward);
+      if (keys['KeyA']) v.sub(right);
+      if (keys['KeyD']) v.add(right);
+      v.normalize();
+
+      let speed = walkSpeed;
+      if (keys['ShiftLeft'] && stats.stamina > 0.5) {
+        speed *= sprintMultiplier;
+        stats.stamina = Math.max(0, stats.stamina - 25*dt);
+      }
+      return v.multiplyScalar(speed * dt);
+    }
+
+    function aabbForSphere(pos, radius=0.5) {
+      return new THREE.Box3(
+        new THREE.Vector3(pos.x - radius, pos.y - radius, pos.z - radius),
+        new THREE.Vector3(pos.x + radius, pos.y + radius, pos.z + radius)
+      );
+    }
+
+    function collides(nextPos) {
+      const playerBox = aabbForSphere(nextPos, 0.6);
+      for (const o of obstacles) {
+        const box = new THREE.Box3().setFromObject(o);
+        if (box.intersectsBox(playerBox)) return true;
+      }
+      return false;
+    }
+
+    // ====== Quest: smid en mijn ======
+    let ironNodes = [];
+    let ironCollected = 0;
+
+    function tryTalkSmith() {
+      if (paused) return;
+      if (state !== STATE.VILLAGE) return;
+      const dist = player.position.distanceTo(smith.position);
+      if (dist < 3) {
+        dialog.style.display = 'block';
+        dialog.innerHTML = '<b>Smid:</b> Ik heb 3 stukken ijzer nodig. Kun je ze voor me halen?';
+        quest.textContent = 'Verzamel 3 stukken ijzer in de mijn';
+        setTimeout(() => {
+          dialog.style.display = 'none';
+          goToMine();
+        }, 2000);
       }
     }
-    document.addEventListener("keydown", function(e) {
-      if (e.key.toLowerCase() === "p") { togglePause(); }
-    });
-    pauseButton.addEventListener("click", togglePause);
 
-    function updateStamina() {
-      document.getElementById("stamina").style.width = stamina + "%";
-    }
-    function updateHealth() {
-      document.getElementById("health").style.width = (playerHealth / maxHealth * 100) + "%";
+    function goToMine() {
+      state = STATE.MINE;
+      // Teleport speler naar mijnlocatie
+      player.position.set(-40, 1.7, -40);
+      controls.getObject().position.copy(player.position);
+      // Spawn 3 ijzerblokken
+      ironNodes.forEach(n => scene.remove(n));
+      ironNodes = [];
+      ironCollected = 0;
+      for (let i=0;i<3;i++) {
+        const iron = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), new THREE.MeshStandardMaterial({ color:0x9ca3af, metalness:0.8, roughness:0.3 }));
+        iron.position.set(-40 + (Math.random()*10-5), 0.5, -40 + (Math.random()*10-5));
+        iron.userData.iron = true;
+        scene.add(iron);
+        ironNodes.push(iron);
+      }
+      dialog.style.display = 'block';
+      dialog.innerHTML = '<b>Tip:</b> Loop naar de ijzerblokken en druk E om op te pakken.';
+      setTimeout(()=> dialog.style.display='none', 2500);
     }
 
-    /************ Scene, Camera, Renderer, Clock ************/
-    var scene = new THREE.Scene();
-    var camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-    var renderer = new THREE.WebGLRenderer({antialias:true});
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(0x0099ff, 1);
-    document.body.appendChild(renderer.domElement);
-    window.addEventListener("resize", function(){
-      camera.aspect = window.innerWidth/window.innerHeight;
+    function pickupCheck() {
+      if (state !== STATE.MINE) return;
+      for (const iron of ironNodes) {
+        if (!iron.visible) continue;
+        if (player.position.distanceTo(iron.position) < 2 && keys['KeyE']) {
+          iron.visible = false;
+          ironCollected++;
+          quest.textContent = `Ijzer verzameld: ${ironCollected}/3`;
+          if (ironCollected >= 3) {
+            backToSmith();
+          }
+        }
+      }
+    }
+
+    function backToSmith() {
+      state = STATE.REWARD;
+      // Teleport terug naar dorp
+      player.position.set(0,1.7,0);
+      controls.getObject().position.copy(player.position);
+      // Beloning: zwaard + schild
+      stats.hasSword = true; stats.hasShield = true;
+      updateHotbar();
+      dialog.style.display = 'block';
+      dialog.innerHTML = '<b>Smid:</b> Goed gedaan! Hier is je zwaard en schild. Ga nu trainen.';
+      quest.textContent = 'Voltooi de training (druk gevraagde toets)';
+      setTimeout(()=> { dialog.style.display='none'; startTraining(); }, 2000);
+    }
+
+    function updateHotbar() {
+      const slots = document.querySelectorAll('.slot');
+      slots[0].textContent = stats.hasSword ? '⚔' : '1';
+      slots[1].textContent = stats.hasShield ? '🛡' : '2';
+      slots[2].textContent = stats.hasArmor ? '🦺' : '3';
+      slots[3].textContent = '4';
+    }
+
+    // ====== Training mini-game ======
+    let trainingPrompt = null;
+    function startTraining() {
+      state = STATE.TRAINING;
+      const keysList = ['KeyW','KeyA','KeyS','KeyD'];
+      const pick = keysList[Math.floor(Math.random()*keysList.length)];
+      const label = {KeyW:'W',KeyA:'A',KeyS:'S',KeyD:'D'}[pick];
+      trainingPrompt = { expected: pick, label };
+      overlay.style.display = 'flex';
+      overlay.innerHTML = `<h2>Training</h2><div>Druk op toets: <b>${label}</b></div>`;
+    }
+    function completeTraining() {
+      overlay.style.display = 'none';
+      trainingPrompt = null;
+      stats.hasArmor = true;
+      updateHotbar();
+      quest.textContent = 'Vijanden naderen! Verdédig je dorp.';
+      startBattle();
+    }
+
+    // ====== Battlefase ======
+    let enemies = [];
+    function startBattle() {
+      state = STATE.BATTLE;
+      spawnEnemies(6);
+    }
+    function spawnEnemies(n) {
+      enemies.forEach(e => scene.remove(e.mesh));
+      enemies = [];
+      for (let i=0;i<n;i++) {
+        const mesh = new THREE.Mesh(new THREE.ConeGeometry(0.7,1.6,10), new THREE.MeshStandardMaterial({ color:0xe76f51 }));
+        const pos = randomEdgePos();
+        mesh.position.set(pos.x, 0.8, pos.z);
+        scene.add(mesh);
+        enemies.push({ mesh, hp: 30, speed: 2.2 });
+      }
+    }
+    function randomEdgePos() {
+      const s = 95;
+      const edges = [
+        {x: -s, z: (Math.random()*2*s - s)},
+        {x: s, z: (Math.random()*2*s - s)},
+        {x: (Math.random()*2*s - s), z: -s},
+        {x: (Math.random()*2*s - s), z: s},
+      ];
+      return edges[Math.floor(Math.random()*edges.length)];
+    }
+
+    function updateEnemies(dt) {
+      if (state !== STATE.BATTLE && state !== STATE.BOSS) return;
+      for (const e of enemies) {
+        const dir = new THREE.Vector3().subVectors(player.position, e.mesh.position);
+        dir.y = 0; const dist = dir.length();
+        dir.normalize();
+        e.mesh.position.addScaledVector(dir, e.speed*dt);
+        // Damage to player if close
+        if (dist < 1.5) damagePlayer(12*dt);
+      }
+      // If all enemies defeated, spawn boss
+      const alive = enemies.filter(e => e.hp > 0);
+      if (alive.length === 0 && state === STATE.BATTLE) {
+        startBoss();
+      }
+    }
+
+    // ====== Zwaardaanval ======
+    function swingSword() {
+      // Simple hit cone in front of player
+      const forward = new THREE.Vector3();
+      controls.getDirection(forward); forward.y = 0; forward.normalize();
+      const origin = player.position.clone();
+      for (const e of enemies) {
+        const toEnemy = new THREE.Vector3().subVectors(e.mesh.position, origin);
+        toEnemy.y = 0;
+        const dist = toEnemy.length();
+        const angle = forward.angleTo(toEnemy.normalize());
+        if (dist < 3 && angle < Math.PI/4) {
+          e.hp -= 20;
+          if (e.hp <= 0) {
+            e.mesh.visible = false;
+          }
+        }
+      }
+      if (boss && boss.hp > 0) {
+        const toBoss = new THREE.Vector3().subVectors(boss.mesh.position, origin);
+        toBoss.y = 0;
+        const dist = toBoss.length();
+        const angle = forward.angleTo(toBoss.normalize());
+        if (dist < 3 && angle < Math.PI/4) {
+          boss.hp -= 15;
+          if (boss.hp <= 0) {
+            boss.mesh.visible = false;
+            winGame();
+          }
+        }
+      }
+      // Stamina cost
+      stats.stamina = Math.max(0, stats.stamina - 15);
+    }
+
+    // ====== Boss ======
+    let boss = null;
+    function startBoss() {
+      state = STATE.BOSS;
+      quest.textContent = 'Ga naar (85,85) en versla de eindbaas';
+      // Spawn boss at ~ (85,85)
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(2.2,3,2.2), new THREE.MeshStandardMaterial({ color:0x6a00f4 }));
+      mesh.position.set(85,1.5,85);
+      scene.add(mesh);
+      boss = { mesh, hp: 120, speed: 1.6 };
+      // Also spawn a couple adds
+      spawnEnemies(4);
+    }
+
+    function updateBoss(dt) {
+      if (!boss || boss.hp <= 0) return;
+      const dist = boss.mesh.position.distanceTo(player.position);
+      if (dist < 30) {
+        const dir = new THREE.Vector3().subVectors(player.position, boss.mesh.position);
+        dir.y = 0; dir.normalize();
+        boss.mesh.position.addScaledVector(dir, boss.speed*dt);
+      }
+      if (dist < 2) damagePlayer(20*dt);
+    }
+
+    // ====== Health/stamina regen ======
+    let regenTimer = 0;
+    function updateRegen(dt) {
+      regenTimer += dt;
+      if (regenTimer >= 0.2) {
+        regenTimer = 0;
+        // Health regen langzaam
+        stats.health = Math.min(stats.maxHealth, stats.health + 0.3);
+        // Stamina regen sneller als niet sprint/aanval
+        if (!keys['ShiftLeft']) stats.stamina = Math.min(stats.maxStamina, stats.stamina + 3);
+      }
+    }
+
+    function damagePlayer(amount) {
+      stats.health = Math.max(0, stats.health - amount);
+      if (stats.health <= 0) {
+        gameOver();
+      }
+    }
+
+    function gameOver() {
+      paused = true;
+      overlay.style.display = 'flex';
+      overlay.innerHTML = `<h2>Game Over</h2><div>Druk R om opnieuw te proberen</div>`;
+      document.addEventListener('keydown', restartListener);
+    }
+    function restartListener(e) {
+      if (e.code === 'KeyR') {
+        document.removeEventListener('keydown', restartListener);
+        location.reload();
+      }
+    }
+
+    function winGame() {
+      state = STATE.WIN;
+      overlay.style.display = 'flex';
+      overlay.innerHTML = `<h2>Gefeliciteerd!</h2><div>Je hebt Prinses Zelda bevrijd!</div>`;
+      quest.textContent = 'Win!';
+      paused = true;
+    }
+
+    // ====== Pauze ======
+    let paused = false;
+    function togglePause() {
+      paused = !paused;
+      overlay.style.display = paused ? 'flex' : 'none';
+      overlay.innerHTML = paused ? '<h2>Gepauzeerd</h2><div>Druk Escape om te hervatten</div>' : '';
+    }
+    document.getElementById('pauseBtn').addEventListener('click', togglePause);
+
+    // ====== Touch controls (NippleJS) ======
+    const mobileControls = document.getElementById('mobile-controls');
+    let leftManager = null, rightManager = null;
+    function setupMobile() {
+      const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      if (!isTouch) return;
+      mobileControls.style.display = 'flex';
+      // Left stick: movement
+      leftManager = nipplejs.create({ zone: document.getElementById('left-stick'), mode: 'static', position: { left:'50%', top:'50%' }, color: 'white' });
+      // Right stick: camera yaw
+      rightManager = nipplejs.create({ zone: document.getElementById('right-stick'), mode: 'static', position: { left:'50%', top:'50%' }, color: 'white' });
+
+      let mobileMove = new THREE.Vector3();
+      leftManager.on('move', (evt, data) => {
+        const rad = data.angle.radian;
+        mobileMove.set(Math.cos(rad), 0, Math.sin(rad)); // local XY, map later
+        mobileMove.normalize().multiplyScalar(data.distance/60); // scale
+      });
+      leftManager.on('end', () => mobileMove.set(0,0,0));
+      rightManager.on('move', (evt,data) => {
+        const deltaYaw = (data.vector.x) * 0.02;
+        // yaw rotate player/camera
+        const euler = new THREE.Euler(0, deltaYaw, 0, 'YXZ');
+        controls.getObject().rotation.y += deltaYaw;
+      });
+      // Map mobileMove to WASD emulation in update loop
+      mobileMoveVector = () => mobileMove.clone();
+    }
+    let mobileMoveVector = () => new THREE.Vector3();
+    setupMobile();
+
+    // ====== Main loop ======
+    let last = performance.now();
+    function loop(now) {
+      requestAnimationFrame(loop);
+      const dt = Math.min(0.033, (now - last)/1000);
+      last = now;
+      if (paused) {
+        renderer.render(scene, camera);
+        return;
+      }
+
+      // Movement
+      let move = desiredMoveVector(dt);
+      // Add mobile contribution
+      const mm = mobileMoveVector();
+      move.add(mm);
+
+      const nextPos = player.position.clone().add(move);
+      if (!collides(nextPos)) {
+        player.position.copy(nextPos);
+        controls.getObject().position.copy(nextPos);
+      }
+
+      // Mine pickup
+      pickupCheck();
+
+      // Attack cooldown
+      if (attackCooldown > 0) attackCooldown = Math.max(0, attackCooldown - dt);
+
+      // Enemies & boss
+      updateEnemies(dt);
+      updateBoss(dt);
+
+      // Regen
+      updateRegen(dt);
+      updateBars();
+
+      renderer.render(scene, camera);
+    }
+    requestAnimationFrame(loop);
+
+    // ====== Boss spawn marker/hints ======
+    const bossHint = new THREE.Mesh(new THREE.TorusGeometry(1.2,0.15,12,24), new THREE.MeshStandardMaterial({ color:0x6a00f4 }));
+    bossHint.rotation.x = -Math.PI/2; bossHint.position.set(85,0.05,85);
+    scene.add(bossHint);
+
+    // ====== Start help text ======
+    dialog.style.display = 'block';
+    dialog.innerHTML = '<b>Tip:</b> Klik om muis te vergrendelen. Loop naar de smid en druk E.';
+    setTimeout(()=> dialog.style.display='none', 2500);
+
+    // ====== Window resize ======
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
-    var clock = new THREE.Clock();
-
-    /************ Pointer Lock & Muisinvoer ************/
-    renderer.domElement.addEventListener("click", function(){
-      renderer.domElement.requestPointerLock();
-    });
-    var playerYaw = 0, sensitivity = 0.002;
-    document.addEventListener("mousemove", function(event) {
-      if (document.pointerLockElement === renderer.domElement) {
-        playerYaw -= event.movementX * sensitivity;
-      }
-    });
-
-    /************ Besturing ************/
-    var keys = {w:false, a:false, s:false, d:false, shift:false, e:false, space:false};
-    document.addEventListener("keydown", function(event) {
-      // Registreer de E-toets speciaal
-      if (event.key.toLowerCase() === "e") {
-        keys.e = true;
-        console.log("[DEBUG] E ingedrukt");
-      }
-      if (event.code === "Space") {
-        keys.space = true;
-      } else if (event.key.toLowerCase() !== "p") {
-        var k = event.key.toLowerCase();
-        if (keys.hasOwnProperty(k)) keys[k] = true;
-      }
-    });
-    document.addEventListener("keyup", function(event) {
-      if (event.key.toLowerCase() === "e") {
-        keys.e = false;
-      }
-      if (event.code === "Space") {
-        keys.space = false;
-      } else if (event.key.toLowerCase() !== "p") {
-        var k = event.key.toLowerCase();
-        if (keys.hasOwnProperty(k)) keys[k] = false;
-      }
-    });
-    document.addEventListener("mousedown", function(event) {
-      if (event.button === 0) { swingSword(); }
-    });
-
-    /************ Verlichting ************/
-    var ambientLight = new THREE.AmbientLight(0x404040, 2);
-    scene.add(ambientLight);
-    var directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-    directionalLight.position.set(5,10,5).normalize();
-    scene.add(directionalLight);
-
-    /************ Improved Noise (Perlin Noise) ************/
-    var ImprovedNoise = function(){
-      var p = new Uint8Array(512);
-      var permutation = [151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,
-                         8,99,37,240,21,10,23,190,6,148,247,120,234,75,0,26,197,62,94,252,219,203,117,35,
-                         11,32,57,177,33,88,237,149,56,87,174,20,125,136,171,168,68,175,74,165,71,134,139,48,
-                         27,166,77,146,158,231,83,111,229,122,60,211,133,230,220,105,92,41,55,46,245,40,244,102,
-                         143,54,65,25,63,161,1,216,80,73,209,76,132,187,208,89,18,169,200,196,135,130,116,188,159,
-                         86,164,100,109,198,173,186,3,64,52,217,226,250,124,123,5,202,38,147,118,126,255,82,85,
-                         212,207,206,59,227,47,16,58,17,182,189,28,42,223,183,170,213,119,248,152,2,44,154,163,
-                         70,221,153,101,155,167,43,172,9,129,22,39,253,19,98,108,110,79,113,224,232,178,185,112,
-                         104,218,246,97,228,251,34,242,193,238,210,144,12,191,179,162,241,81,51,145,235,249,14,239,
-                         107,49,192,214,31,181,199,106,157,184,84,204,176,115,121,50,45,127,4,150,254,138,236,205,
-                         93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180];
-      for(var i=0; i<256; i++){
-         p[i] = permutation[i];
-         p[256+i] = permutation[i];
-      }
-      function fade(t){ return t*t*t*(t*(t*6-15)+10); }
-      function lerp(t,a,b){ return a + t*(b-a); }
-      function grad(hash,x,y,z){
-         var h = hash & 15;
-         var u = h < 8 ? x : y;
-         var v = h < 4 ? y : (h===12 || h===14 ? x : z);
-         return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
-      }
-      this.noise = function(x,y,z){
-         var floorX = Math.floor(x), floorY = Math.floor(y), floorZ = Math.floor(z);
-         var X = floorX & 255, Y = floorY & 255, Z = floorZ & 255;
-         x -= floorX; y -= floorY; z -= floorZ;
-         var u = fade(x), v = fade(y), w = fade(z);
-         var A = p[X] + Y, AA = p[A] + Z, AB = p[A+1] + Z;
-         var B = p[X+1] + Y, BA = p[B] + Z, BB = p[B+1] + Z;
-         return lerp(w,
-            lerp(v,
-               lerp(u, grad(p[AA], x,y,z), grad(p[BA], x-1,y,z)),
-               lerp(u, grad(p[AB], x,y-1,z), grad(p[BB], x-1,y-1,z))
-            ),
-            lerp(v,
-               lerp(u, grad(p[AA+1], x,y,z-1), grad(p[BA+1], x-1,y,z-1)),
-               lerp(u, grad(p[AB+1], x,y-1,z-1), grad(p[BB+1], x-1,y-1,z-1))
-            )
-         );
-      };
-    };
-    var noise = new ImprovedNoise();
-
-    /************ Terrain Generation ************/
-    var terrainGeometry = new THREE.PlaneGeometry(200, 200, 199, 199);
-    terrainGeometry.rotateX(-Math.PI/2);
-    function getTerrainHeight(x,z){
-         return noise.noise(x/50, z/50, 0) * 10;
-    }
-    var vertices = terrainGeometry.attributes.position;
-    for(var i=0; i<vertices.count; i++){
-         var x = vertices.getX(i);
-         var z = vertices.getZ(i);
-         vertices.setY(i, getTerrainHeight(x,z));
-    }
-    vertices.needsUpdate = true;
-    terrainGeometry.computeVertexNormals();
-    var terrainMaterial = new THREE.MeshStandardMaterial({ color: 0x55aa55, flatShading:true });
-    var terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
-    scene.add(terrain);
-
-    /************ Trees ************/
-    function createTree(x,z){
-         var y = getTerrainHeight(x,z);
-         var trunkGeom = new THREE.CylinderGeometry(0.5,0.5,4,8);
-         var trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
-         var trunk = new THREE.Mesh(trunkGeom, trunkMat);
-         trunk.position.set(x, y+2, z);
-         scene.add(trunk);
-         var leavesGeom = new THREE.SphereGeometry(2,8,8);
-         var leavesMat = new THREE.MeshStandardMaterial({ color: 0x228B22 });
-         var leaves = new THREE.Mesh(leavesGeom, leavesMat);
-         leaves.position.set(x, y+4.5, z);
-         scene.add(leaves);
-         treeColliders.push({ pos: trunk.position.clone(), radius: 1.5 });
-    }
-    for(var i=0; i<30; i++){
-         var tx = Math.random()*200 - 100;
-         var tz = Math.random()*200 - 100;
-         createTree(tx,tz);
-    }
-
-    /************ Hotbar UI ************/
-    for(var i=0; i<10; i++){
-         var slot = document.createElement("div");
-         slot.className = "hotbar-slot";
-         slot.innerText = "";
-         hotbar.appendChild(slot);
-    }
-    var hotbarItems = new Array(10).fill(null);
-    function addToHotbar(item){
-         for(var i=0; i<hotbarItems.length; i++){
-            if(!hotbarItems[i]){
-               hotbarItems[i] = item;
-               hotbar.children[i].innerText = item;
-               break;
-            }
-         }
-    }
-
-    /************ NPC Smith (Smid) ************/
-    function createSmid(){
-         var smidGroup = new THREE.Group();
-         // Body
-         var bodyGeom = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);
-         var bodyMat = new THREE.MeshStandardMaterial({ color: 0x663300 });
-         var bodyMesh = new THREE.Mesh(bodyGeom, bodyMat);
-         bodyMesh.position.y = 1;
-         smidGroup.add(bodyMesh);
-         // Head
-         var headGeom = new THREE.SphereGeometry(0.5, 16, 16);
-         var headMat = new THREE.MeshStandardMaterial({ color: 0xffcc99 });
-         var headMesh = new THREE.Mesh(headGeom, headMat);
-         headMesh.position.y = 2.5;
-         smidGroup.add(headMesh);
-         // Hat
-         var hatGeom = new THREE.ConeGeometry(0.6, 1, 16);
-         var hatMat = new THREE.MeshStandardMaterial({ color: 0x000000 });
-         var hatMesh = new THREE.Mesh(hatGeom, hatMat);
-         hatMesh.position.y = 3.2;
-         smidGroup.add(hatMesh);
-         smidGroup.position.set(10, getTerrainHeight(10,10), 10);
-         scene.add(smidGroup);
-         return smidGroup;
-    }
-    var npcSmith = createSmid();
-
-    /************ Spawn Village Objects ************/
-    function createHouse(x, z) {
-         var houseGroup = new THREE.Group();
-         // Basis van het huis
-         var baseGeom = new THREE.BoxGeometry(4,3,4);
-         var baseMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee });
-         var baseMesh = new THREE.Mesh(baseGeom, baseMat);
-         baseMesh.position.y = 1.5; // helft van 3
-         houseGroup.add(baseMesh);
-         // Dak: een kegel (als dak)
-         var roofGeom = new THREE.ConeGeometry(3.5, 2, 4);
-         var roofMat = new THREE.MeshStandardMaterial({ color: 0xaa0000 });
-         var roofMesh = new THREE.Mesh(roofGeom, roofMat);
-         roofMesh.rotation.y = Math.PI/4;
-         roofMesh.position.y = 4;  // zet het dak boven de basis
-         houseGroup.add(roofMesh);
-         var hy = getTerrainHeight(x,z);
-         houseGroup.position.set(x, hy, z);
-         scene.add(houseGroup);
-    }
-    function spawnVillage(){
-         var housePositions = [
-            { x: 5, z: 5 },
-            { x: 15, z: 5 },
-            { x: 10, z: 15 }
-         ];
-         for(var i = 0; i < housePositions.length; i++){
-            var pos = housePositions[i];
-            createHouse(pos.x, pos.z);
-         }
-    }
-    if(gameState === "village"){ spawnVillage(); }
-
-    /************ Player (Verbeterd Model) ************/
-    function createPlayer(){
-         var playerGroup = new THREE.Group();
-         // Lichaam: cilindrisch
-         var bodyGeom = new THREE.CylinderGeometry(0.4, 0.4, 1.5, 16);
-         var bodyMat = new THREE.MeshStandardMaterial({ color: 0x0000ff });
-         var bodyMesh = new THREE.Mesh(bodyGeom, bodyMat);
-         bodyMesh.position.y = 0.75;
-         playerGroup.add(bodyMesh);
-         // Hoofd: bol
-         var headGeom = new THREE.SphereGeometry(0.4, 16, 16);
-         var headMat = new THREE.MeshStandardMaterial({ color: 0xffcc99 });
-         var headMesh = new THREE.Mesh(headGeom, headMat);
-         headMesh.position.y = 1.9;
-         playerGroup.add(headMesh);
-         playerGroup.position.set(0, getTerrainHeight(0,0), 0);
-         scene.add(playerGroup);
-         return playerGroup;
-    }
-    var player = createPlayer();
-
-    /************ Chest ************/
-    var chestGeom = new THREE.BoxGeometry(1,0.5,1);
-    var chestMat = new THREE.MeshStandardMaterial({ color: 0xaa5522 });
-    var chest = new THREE.Mesh(chestGeom, chestMat);
-    var chestX = 50, chestZ = 50;
-    chest.position.set(chestX, getTerrainHeight(chestX,chestZ)+0.25, chestZ);
-    scene.add(chest);
-    var chestOpened = false;
-
-    /************ Sword & Swing Animation ************/
-    var swordAttached = false, sword;
-    function attachSword(){
-         if(swordAttached) return;
-         var swordGeom = new THREE.BoxGeometry(0.1,1.5,0.2);
-         var swordMat = new THREE.MeshStandardMaterial({ color: 0xcccccc });
-         sword = new THREE.Mesh(swordGeom, swordMat);
-         sword.position.set(0.6,0.25,0);
-         player.add(sword);
-         swordAttached = true;
-    }
-    var isSwinging = false;
-    function swingSword(){
-         if(!swordAttached || isSwinging) return;
-         isSwinging = true;
-         sword.rotation.x = -Math.PI/4;
-         attackEnemies();
-         setTimeout(function(){
-            sword.rotation.x = 0;
-            isSwinging = false;
-         },200);
-    }
-
-    /************ Sword Hit Detection & Damage Animation ************/
-    function attackEnemies(){
-         var attackRange = 3;
-         var damageAmount = 25;
-         for(var i=0; i<enemies.length; i++){
-            var enemy = enemies[i];
-            var distance = enemy.position.distanceTo(player.position);
-            if(distance <= attackRange){
-               enemy.health -= damageAmount;
-               flashEnemyDamage(enemy);
-               if(enemy.health <= 0){
-                  scene.remove(enemy);
-                  enemies.splice(i,1);
-                  i--;
-               }
-            }
-         }
-         if(gameState === "battle" && boss){
-            var d = boss.position.distanceTo(player.position);
-            if(d <= attackRange){
-               boss.health -= damageAmount;
-               flashEnemyDamage(boss);
-               if(boss.health <= 0){
-                  scene.remove(boss);
-                  boss = undefined;
-                  gameState = "win";
-                  winOverlay.style.display = "flex";
-               }
-            }
-         }
-    }
-    function flashEnemyDamage(enemy){
-         var originalColor = enemy.material.color.getHex();
-         enemy.material.color.set(0xffffff);
-         setTimeout(function(){
-            enemy.material.color.set(originalColor);
-         },100);
-    }
-
-    /************ Enemy Spawning & Updates ************/
-    function spawnEnemies(count){
-         for(var i=0; i<count; i++){
-            var enemyGeom = new THREE.BoxGeometry(1,1,1);
-            var enemyMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-            var enemy = new THREE.Mesh(enemyGeom, enemyMat);
-            var ex, ez;
-            do{
-               ex = Math.random()*200 - 100;
-               ez = Math.random()*200 - 100;
-            } while((new THREE.Vector2(ex,ez)).distanceTo(new THREE.Vector2(player.position.x,player.position.z)) < 30);
-            var ey = getTerrainHeight(ex,ez)+1;
-            enemy.position.set(ex,ey,ez);
-            enemy.health = 50;
-            enemy.speed = 10;
-            scene.add(enemy);
-            enemies.push(enemy);
-         }
-    }
-    function updateEnemies(delta){
-         if(gameState === "battle"){
-            if(!boss){
-               var bossGeom = new THREE.BoxGeometry(3,3,3);
-               var bossMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-               boss = new THREE.Mesh(bossGeom, bossMat);
-               boss.health = 300;
-               var bx = 85, bz = 85;
-               var by = getTerrainHeight(bx,bz)+1;
-               boss.position.set(bx,by,bz);
-               scene.add(boss);
-            }
-            if(boss){
-               var dir = new THREE.Vector3().subVectors(player.position, boss.position);
-               var dist = dir.length();
-               dir.normalize();
-               boss.position.add(dir.multiplyScalar(5 * delta));
-               if(dist < 3){
-                  var damage = 20 * delta;
-                  playerHealth -= damage;
-                  updateHealth();
-                  if(playerHealth <= 0){
-                     alert("Game Over!");
-                     location.reload();
-                  }
-               }
-            }
-         } else {
-            if(gameState !== "battle" && enemies.length === 0 && questCompleted){
-               spawnEnemies(3);
-            }
-            for(var i=0; i<enemies.length; i++){
-               var enemy = enemies[i];
-               var dvec = new THREE.Vector3().subVectors(player.position, enemy.position);
-               var dist = dvec.length();
-               dvec.normalize();
-               enemy.position.add(dvec.multiplyScalar(enemy.speed * delta));
-               if(dist < 2){
-                  var damage = 10 * delta;
-                  playerHealth -= damage;
-                  updateHealth();
-                  if(playerHealth <= 0){
-                     alert("Game Over!");
-                     location.reload();
-                  }
-               }
-            }
-         }
-    }
-
-    /************ Collision Detection ************/
-    var playerRadius = 0.5;
-    function checkCollision(newPos){
-         var collision = false;
-         if(obstacles.length > 0){
-            for(var i=0; i<obstacles.length; i++){
-               if(newPos.distanceTo(obstacles[i].position) < 1.5){
-                  collision = true;
-                  break;
-               }
-            }
-         }
-         for(var j=0; j<treeColliders.length; j++){
-            var tree = treeColliders[j];
-            if(newPos.distanceTo(tree.pos) < (playerRadius + tree.radius)){
-               collision = true;
-               break;
-            }
-         }
-         return collision;
-    }
-
-    /************ Map Bounds & Falling ************/
-    function checkBounds(){
-         if(player.position.y < -20){
-            player.position.set(0, getTerrainHeight(0,0)+1, 0);
-         }
-    }
-
-    /************ INTERACTIES (Verbeterde Quest Interactie) ************/
-function checkInteraction() {
-    console.log("[DEBUG] checkInteraction invoked, gameState:", gameState);
-
-    // Verkrijg de computed display-waarde van de dialoog-overlay
-    var computedDialogueDisplay = getComputedStyle(dialogueOverlay).display;
-    console.log("[DEBUG] Computed dialogueOverlay display:", computedDialogueDisplay);
-
-    if (gameState === "village") {
-        var distToSmith = player.position.distanceTo(npcSmith.position);
-        console.log("[DEBUG] Afstand tot smid:", distToSmith);
-        
-        // Let op: keys.e is een boolean; vergelijk dus direct!
-        if (distToSmith <= 5 && keys.e && computedDialogueDisplay === "none" && canInteract) {
-            console.log("[DEBUG] Interactie met smid gestart in 'village'!");
-            dialogueOverlay.style.display = "block"; // Zet de overlay zichtbaar
-            setTimeout(() => { 
-                console.log("[DEBUG] 2 seconden later, waarde van dialogueOverlay:", dialogueOverlay.style.display);
-            }, 2000);
-            console.log("[DEBUG] Na het instellen, waarde van dialogueOverlay:", dialogueOverlay.style.display);
-            dialogueText.innerText = "Smid: Heb je 3 stukken ijzer voor mij? (Ja/Nee)";
-            console.log("[DEBUG] Nieuwe inline waarde van dialogueOverlay:", dialogueOverlay.style.display);
-            canInteract = false;
-            keys.e = false;
-            setTimeout(() => { 
-                canInteract = true; 
-                console.log("[DEBUG] Interactie opnieuw toegestaan."); 
-            }, 2000);
-        }
-    }
-
-    if (gameState === "villageAfterMine") {
-        var distToSmith = player.position.distanceTo(npcSmith.position);
-        console.log("[DEBUG] Afstand tot smid:", distToSmith);
-        
-        if (distToSmith <= 5 && keys.e && computedDialogueDisplay === "none" && canInteract) {
-            console.log("[DEBUG] Interactie met smid gestart in 'villageAfterMine'!");
-            dialogueOverlay.style.display = "block"; // Zet de overlay zichtbaar
-            dialogueText.innerText = "Smid: Dank je! Hier is je zwaard en schild.";
-            console.log("[DEBUG] Nieuwe inline waarde van dialogueOverlay:", dialogueOverlay.style.display);
-            keys.e = false;
-            setTimeout(() => { 
-                canInteract = true; 
-                console.log("[DEBUG] Interactie opnieuw toegestaan."); 
-            }, 2000);
-        }
-    }
-}
-
-// Event Listeners voor dialoog
-dialogueYes.addEventListener("click", function () {
-    if (gameState === "village") {
-        console.log("[DEBUG] Speler accepteert de quest!"); // Debug: Bevestig keuze
-        dialogueOverlay.style.display = "none";
-        gameState = "mine";
-        player.position.set(-70, getTerrainHeight(-70, -70) + 1, -70);
-        collectedIron = 0;
-        spawnIronNodes();
-    } else if (gameState === "villageAfterMine") {
-        console.log("[DEBUG] Speler ontvangt zwaard en schild!"); // Debug: Bevestig beloning
-        dialogueOverlay.style.display = "none";
-        addToHotbar("Zwaard");
-        addToHotbar("Schild");
-        player.position.set(80, getTerrainHeight(80, 80) + 1, 80);
-        gameState = "castleTraining";
-        startTrainingMiniGame();
-    }
-});
-
-dialogueNo.addEventListener("click", function () {
-    console.log("[DEBUG] Speler weigert de interactie."); // Debug: Bevestig keuze
-    dialogueOverlay.style.display = "none";
-});
-
-// Toetsenregistratie met debugging
-document.addEventListener("keydown", function(event) {
-    var key = event.key.toLowerCase();
-    if (keys.hasOwnProperty(key)) {
-        console.log(`[DEBUG] Toets ingedrukt: ${key}`);
-        keys[key] = true;
-    }
-});
-
-document.addEventListener("keyup", function(event) {
-    var key = event.key.toLowerCase();
-    if (keys.hasOwnProperty(key)) {
-        console.log(`[DEBUG] Toets losgelaten: ${key}`);
-        keys[key] = false;
-    }
-});
-
-function fixInteraction(){
-  dialogueOverlay.style.display = "none"
-   console.log("[DEBUG] Fixed Interaction Dialoog Style")
-}    
-
-    /************ ADI ************/
-    
-// Automatische debug-logging elke 10 seconden
-setInterval(function() {
-    var computedDialogueDisplay = getComputedStyle(dialogueOverlay).display;
-    console.log(".....");
-    console.log("[DEBUG] ===== Automatische Debug Info (ADI) =====");
-    console.log("[DEBUG] Game State:", gameState);
-    console.log("[DEBUG] Speler positie:", player.position);
-    console.log("[DEBUG] Smid positie:", npcSmith.position);
-    console.log("[DEBUG] Afstand tot smid:", player.position.distanceTo(npcSmith.position));
-    console.log("[DEBUG] Keys ingedrukt:", keys);
-    console.log("[DEBUG] Kan interacteren?", canInteract);
-    console.log("[DEBUG] Player Health:", playerHealth);
-    console.log("[DEBUG] Stamina:", stamina);
-    console.log("[DEBUG] Inventory:", hotbarItems);
-    console.log("[DEBUG] Computed Dialoogoverlay:", computedDialogueDisplay)
-    console.log("[DEBUG] Dialoogoverlay element:", dialogueOverlay);
-    console.log("[DEBUG] Waarde van dialoogoverlay:", dialogueOverlay.style.display);
-    console.log("[DEBUG] ===== Einde ADI =====");
-    console.log(".....");
-}, 10000);
-    
-  
-    /************ Iron Mining in de Mijn ************/
-    function spawnIronNodes(){
-         for(var i = 0; i < 3; i++){
-            var ironGeom = new THREE.BoxGeometry(0.8,0.8,0.8);
-            var ironMat = new THREE.MeshStandardMaterial({ color: 0x999999 });
-            var ironNode = new THREE.Mesh(ironGeom, ironMat);
-            var ix = -70 + Math.random()*10 - 5;
-            var iz = -70 + Math.random()*10 - 5;
-            var iy = getTerrainHeight(ix,iz)+0.4;
-            ironNode.position.set(ix,iy,iz);
-            scene.add(ironNode);
-            ironNodes.push(ironNode);
-         }
-         miningOverlay.style.display = "block";
-    }
-    function updateIronNodes(){
-         for(var i = 0; i < ironNodes.length; i++){
-            var node = ironNodes[i];
-            var d = node.position.distanceTo(player.position);
-            if(d < 3){
-               scene.remove(node);
-               ironNodes.splice(i,1);
-               i--;
-               collectedIron++;
-               addToHotbar("Ijzer");
-            }
-         }
-         if(collectedIron >= 3){
-            miningOverlay.style.display = "none";
-            player.position.set(10, getTerrainHeight(10,10)+1, 10);
-            gameState = "villageAfterMine";
-         }
-    }
-
-    /************ Training Mini-game ************/
-    var trainingKey = "";
-    function startTrainingMiniGame(){
-         var keysArr = ["a","s","d","w"];
-         trainingKey = keysArr[Math.floor(Math.random()*keysArr.length)];
-         trainingKeySpan.innerText = trainingKey.toUpperCase();
-         trainingOverlay.style.display = "flex";
-    }
-    document.addEventListener("keydown", function(e){
-         if(gameState === "castleTraining"){
-            if(e.key.toLowerCase() === trainingKey){
-               trainingOverlay.style.display = "none";
-               addToHotbar("Harnas");
-               player.position.set(85, getTerrainHeight(85,85)+1, 85);
-               gameState = "battle";
-            }
-         }
-    });
-
-    /************ Final Boss & Win ************/
-    function spawnBoss(){
-         var bossGeom = new THREE.BoxGeometry(3,3,3);
-         var bossMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-         boss = new THREE.Mesh(bossGeom, bossMat);
-         boss.health = 300;
-         var bx = 85, bz = 85;
-         var by = getTerrainHeight(bx,bz)+1;
-         boss.position.set(bx,by,bz);
-         scene.add(boss);
-    }
-    
-    /************ Main Game Loop ************/
-    function animate(){
-         requestAnimationFrame(animate);
-         var delta = clock.getDelta();
-         
-         if(isPaused){
-            renderer.render(scene, camera);
-            return;
-         }
-         
-         // Health regeneratie
-         playerHealth = Math.min(maxHealth, playerHealth + 2 * delta);
-         updateHealth();
-         
-         if(gameState === "mine"){
-            updateIronNodes();
-         }
-         if(gameState === "battle" && !boss){
-            spawnBoss();
-         }
-         
-         player.rotation.y = playerYaw;
-         var forward = new THREE.Vector3(-Math.sin(playerYaw), 0, -Math.cos(playerYaw));
-         var right = forward.clone().cross(new THREE.Vector3(0,1,0)).normalize();
-         var baseSpeed = (keys.shift && stamina > 0) ? 40 : 20;
-         var speed = baseSpeed * delta;
-         if(keys.shift){ stamina -= 0.5 * delta * 60; }
-         else{ stamina += 0.2 * delta * 60; }
-         stamina = Math.max(0, Math.min(100, stamina));
-         updateStamina();
-         var newPos = player.position.clone();
-         if(keys.w){ newPos.add(forward.clone().multiplyScalar(speed)); }
-         if(keys.s){ newPos.add(forward.clone().multiplyScalar(-speed)); }
-         if(keys.a){ newPos.add(right.clone().multiplyScalar(-speed)); }
-         if(keys.d){ newPos.add(right.clone().multiplyScalar(speed)); }
-         var groundLevel = (Math.abs(newPos.x) <= 100 && Math.abs(newPos.z) <= 100) ? getTerrainHeight(newPos.x, newPos.z) + 1 : 1;
-         if(!isJumping){
-            if(keys.space){
-               verticalVelocity = jumpForce;
-               isJumping = true;
-            }
-            newPos.y = groundLevel;
-         } else {
-            newPos.y = player.position.y + verticalVelocity * delta;
-            verticalVelocity -= gravity * delta;
-            if(newPos.y <= groundLevel){
-               newPos.y = groundLevel;
-               verticalVelocity = 0;
-               isJumping = false;
-            }
-         }
-         if(!checkCollision(newPos)){
-            player.position.copy(newPos);
-         }
-         checkBounds();
-         updateEnemies(delta);
-         
-         var cameraOffset = forward.clone().multiplyScalar(-5).add(new THREE.Vector3(0,3,0));
-         camera.position.copy(player.position).add(cameraOffset);
-         camera.lookAt(player.position);
-         
-         renderer.render(scene, camera);
-    }
-    animate();
-    checkInteraction();
   </script>
 </body>
 </html>
